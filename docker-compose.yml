@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: safaron-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: safaron
+      POSTGRES_PASSWORD: safaron
+      POSTGRES_DB: safaron
+    ports:
+      - "5432:5432"
+    volumes:
+      - safaron_pg:/var/lib/postgresql/data
+
+volumes:
+  safaron_pg:

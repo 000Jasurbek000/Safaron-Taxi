@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+
+<html lang="uz">
+
+<head>
+
+  <meta charset="UTF-8" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <title>SAFARON Admin</title>
+
+  <link rel="icon" href="img/logo.png" type="image/png" />
+  <link rel="stylesheet" href="css/app.css?v=5" />
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+</head>
+
+<body>
+
+  <div id="loginView" class="login-wrap">
+
+    <form id="loginForm" class="login-card" action="#" method="post">
+      <img class="login-logo" src="img/logo.png?v=4" alt="SAFARON" />
+      <h1>SAFARON Admin</h1>
+
+      <p class="muted">Bir yo‘lda birga — boshqaruv paneli</p>
+
+      <label>Telefon</label>
+
+      <input id="loginPhone" autocomplete="username" required />
+
+      <label>Parol</label>
+
+      <input id="loginPass" type="password" autocomplete="current-password" required />
+
+      <button type="submit" id="loginBtn">Kirish</button>
+
+      <p id="loginErr" class="error"></p>
+
+    </form>
+
+  </div>
+
+
+
+  <div id="appView" class="layout hidden">
+
+    <aside class="sidebar">
+
+      <div class="brand"><img src="img/logo.png?v=4" alt="" /><div>SAFARON <small>Admin Panel</small></div></div>
+
+      <nav id="nav">
+
+        <button type="button" data-page="dashboard"><span class="ico">⌂</span> Bosh sahifa</button>
+
+        <button type="button" data-page="users"><span class="ico">☺</span> Foydalanuvchilar</button>
+
+        <button type="button" data-page="drivers"><span class="ico">▣</span> Haydovchilar</button>
+
+        <button type="button" data-page="applications"><span class="ico">✎</span> Arizalar</button>
+
+        <button type="button" data-page="requests"><span class="ico">☰</span> Buyurtmalar</button>
+
+        <button type="button" data-page="trips"><span class="ico">→</span> Safarlar</button>
+
+        <button type="button" data-page="bonuses"><span class="ico">★</span> Bonus tizimi</button>
+
+        <button type="button" data-page="referrals"><span class="ico">⚭</span> Referal tizimi</button>
+
+        <button type="button" data-page="withdrawals"><span class="ico">₸</span> To‘lovlar va yechimlar</button>
+
+        <button type="button" data-page="fraud"><span class="ico">✓</span> Tasdiqlash</button>
+
+        <button type="button" data-page="locations"><span class="ico">⌖</span> Joylar</button>
+
+        <button type="button" data-page="pendingLocations"><span class="ico">＋</span> Yangi joylar</button>
+
+        <button type="button" data-page="documents"><span class="ico">▢</span> Hujjatlar</button>
+
+        <button type="button" data-page="notifications"><span class="ico">🔔</span> Xabarnomalar</button>
+
+        <button type="button" data-page="flags"><span class="ico">⚙</span> Ilova sozlamalari</button>
+
+        <button type="button" data-page="settings"><span class="ico">☰</span> Tizim sozlamalari</button>
+
+        <button type="button" data-page="logs"><span class="ico">≡</span> Loglar</button>
+
+      </nav>
+
+      <div class="side-foot">
+
+        <div class="muted" style="font-size:12px;color:#94a3b8">Ilova versiyasi</div>
+
+        <strong id="sideVersion">1.1.0</strong>
+
+        <div class="online-dot">Onlayn</div>
+
+      </div>
+
+      <button type="button" id="logoutBtn" class="ghost">Chiqish</button>
+
+    </aside>
+
+    <main>
+
+      <header class="topbar">
+
+        <div class="top-search">Qidirish: foydalanuvchi, buyurtma, kod, telefon...</div>
+
+        <div class="topbar-titles">
+
+          <h2 id="pageTitle">Bosh sahifa</h2>
+
+          <div class="muted" id="pageSub">Umumiy ko‘rinish</div>
+
+        </div>
+
+        <div class="topbar-actions">
+
+          <div class="admin-chip">
+
+            <span class="u-avatar ph" id="adminAvatar">A</span>
+
+            <span id="adminName">Admin</span>
+
+          </div>
+
+        </div>
+
+      </header>
+
+      <section id="content"></section>
+
+    </main>
+
+  </div>
+
+
+
+  <div id="modalRoot"></div>
+
+  <div id="lightboxRoot"></div>
+
+
+
+  <script src="js/ui.js?v=4"></script>
+
+  <script src="js/api.js"></script>
+
+  <script src="js/app.js?v=4"></script>
+
+  <script src="js/platform.js?v=4"></script>
+
+</body>
+
+</html>
+

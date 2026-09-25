@@ -1,0 +1,54 @@
+name: safaron
+description: "SAFARON TAXI — mini taksi ilovasi"
+publish_to: 'none'
+
+version: 1.1.0+4
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  geolocator: ^14.0.3
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
+  http: ^1.2.2
+  shared_preferences: ^2.5.5
+  url_launcher: ^6.3.2
+  image_picker: ^1.1.2
+  network_info_plus: ^8.2.1
+  path_provider: ^2.1.5
+  open_filex: ^4.7.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/images/logo.png
+  adaptive_icon_background: "#2E7D32"
+  adaptive_icon_foreground: assets/images/logo.png
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/main.png
+    - assets/images/logo.png
+    - assets/images/prebook_waiting_hero.png
+    - assets/images/car_cobalt.png
+    - assets/images/driver_avatar.png
+    - assets/images/become_driver_hero.png
+    - assets/images/driver_approved_car.png
+    - assets/images/messages_empty_hero.png
+    - assets/images/trips_empty_hero.png
+    - assets/images/trips_header_hero.png
+    - assets/images/trip_thumb_1.png
+    - assets/images/trip_thumb_2.png
+    - assets/images/trip_thumb_3.png
