@@ -44,6 +44,15 @@ class SignInIn(BaseModel):
     referral_code: Optional[str] = None
 
 
+class PhoneLookupOut(BaseModel):
+    exists: bool
+    first_name: str = ""
+    last_name: str = ""
+    full_name: str = ""
+    phone_display: str = ""
+    active_role: str = "passenger"
+
+
 class UserOut(BaseModel):
     id: int
     phone: str
@@ -115,16 +124,19 @@ class TripCreateIn(BaseModel):
     to_note: Optional[str] = None
     scheduled_at: datetime
     seats_total: int = Field(ge=1, le=15)
-    price: int = Field(ge=1000)
+    price: int = Field(ge=0)
     note: Optional[str] = None
 
 
 class TripOut(BaseModel):
     id: int
     driver_id: int
+    driver_user_id: Optional[int] = None
     driver_name: str = ""
     driver_rating: float = 5.0
+    driver_reviews: int = 0
     driver_phone: str = ""
+    driver_photo: Optional[str] = None
     car_model: str = ""
     plate: str = ""
     car_photo: Optional[str] = None

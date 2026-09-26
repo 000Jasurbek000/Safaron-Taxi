@@ -1,10 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.deps import get_approved_driver, get_current_user, get_optional_user
+from app.deps import get_approved_driver, get_current_user, get_driver_profile, get_optional_user
 from app.models import DriverProfile, Trip, TripBooking, User, Vehicle
 from app.schemas import BookTripIn, CancelIn, OkResponse, TripCreateIn, TripOut
 from app.services.fsm import TRIP_TRANSITIONS, assert_transition
@@ -26,7 +26,15 @@ def list_ready_trips(
     db: Session = Depends(get_db),
     _: User | None = Depends(get_optional_user),
 ):
-    q = db.query(Trip).filter(Trip.status == "OPEN", Trip.seats_available > 0, Trip.scheduled_at >= datetime.utcnow())
+    q = (
+        db.query(Trip)
+        .join(DriverProfile, DriverProfile.id == Trip.driver_id)
+        .filter(
+            Trip.status.in_(["OPEN", "FULL"]),
+            Trip.seats_available > 0,
+            DriverProfile.status == "APPROVED",
+        )
+    )
     if from_q:
         q = q.filter(Trip.from_text.ilike(f"%{from_q.strip()}%"))
     if to_q:
@@ -36,19 +44,21 @@ def list_ready_trips(
 
 
 @router.post("", response_model=TripOut)
-def create_trip(body: TripCreateIn, driver: DriverProfile = Depends(get_approved_driver), db: Session = Depends(get_db)):
+def create_trip(body: TripCreateIn, driver: DriverProfile = Depends(get_driver_profile), db: Session = Depends(get_db)):
     if not driver.is_online:
         # Allow create offline, but warn via message — still allow publish
         pass
-    from_text = body.from_text.strip()
-    to_text = body.to_text.strip()
-    if not from_text or not to_text:
-        raise HTTPException(400, "Qayerdan va qayerga majburiy.")
+    from_text = (body.from_text or "").strip() or "Ochiq"
+    to_text = (body.to_text or "").strip() or "Yo‘nalish ochiq"
     if from_text.lower() == to_text.lower():
-        raise HTTPException(400, "Qayerdan va qayerga bir xil bo‘lishi mumkin emas.")
+        to_text = f"{to_text} (qaytish)"
     scheduled = parse_dt(body.scheduled_at)
-    if scheduled < datetime.utcnow():
+    if scheduled.tzinfo is not None:
+        scheduled = scheduled.replace(tzinfo=None)
+    if scheduled < datetime.utcnow() - timedelta(hours=1):
         raise HTTPException(400, "Vaqt o‘tib ketgan.")
+    if scheduled < datetime.utcnow():
+        scheduled = datetime.utcnow() + timedelta(minutes=1)
     trip = Trip(
         driver_id=driver.id,
         from_location_id=body.from_location_id,

@@ -109,6 +109,15 @@ def public_config(db: Session) -> dict:
         "referral_enabled": flags.get("referral", True),
         "withdrawal_enabled": flags.get("withdrawal", True),
         "withdrawal_min": int(setting(db, "withdrawal_min", "10000") or "10000"),
+        "vehicle_models": [
+            s.strip()
+            for s in setting(
+                db,
+                "vehicle_models",
+                "Chevrolet Cobalt,Chevrolet Nexia,Chevrolet Spark,Chevrolet Tracker,BYD Chazor,Chevrolet Lacetti",
+            ).split(",")
+            if s.strip()
+        ],
         "bonus_rules": [
             {
                 "key": r.key,

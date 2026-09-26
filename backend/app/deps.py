@@ -44,20 +44,31 @@ def get_optional_user(
     return user
 
 
-def get_approved_driver(
+def get_driver_profile(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> DriverProfile:
+    """Haydovchi profili — PENDING ham ruxsat (admin e’lonni ko‘rsin)."""
     driver = (
         db.query(DriverProfile)
         .options(joinedload(DriverProfile.vehicle), joinedload(DriverProfile.user))
         .filter(DriverProfile.user_id == user.id)
         .first()
     )
-    if not driver or driver.status != "APPROVED":
-        raise HTTPException(status_code=403, detail="Haydovchi sifatida tasdiqlanmagansiz.")
+    if not driver:
+        raise HTTPException(status_code=403, detail="Haydovchi profili topilmadi.")
     if driver.status == "SUSPENDED":
         raise HTTPException(status_code=403, detail="Haydovchi akkauntingiz to‘xtatilgan.")
+    return driver
+
+
+def get_approved_driver(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DriverProfile:
+    driver = get_driver_profile(user, db)
+    if driver.status != "APPROVED":
+        raise HTTPException(status_code=403, detail="Haydovchi sifatida tasdiqlanmagansiz.")
     return driver
 
 

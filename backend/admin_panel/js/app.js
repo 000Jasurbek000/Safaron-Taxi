@@ -35,6 +35,67 @@
     return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
+  function docKey(x) {
+    const raw = String(x.url || x.photo_url || '').split('?')[0].replace(/\/+$/, '');
+    const base = raw.split('/').pop() || '';
+    return { raw, base, type: x.type || x.label || '' };
+  }
+
+  function uniqueDocs(list) {
+    const seen = new Set();
+    const out = [];
+    (list || []).forEach((x) => {
+      const { raw, base, type } = docKey(x);
+      const keys = [raw, base && `${type}:${base}`, base].filter(Boolean);
+      if (keys.some((k) => seen.has(k))) return;
+      keys.forEach((k) => seen.add(k));
+      out.push(x);
+    });
+    return out;
+  }
+
+  function collectDriverDocs(d, { skipSelfie = false } = {}) {
+    const fromDocs = (d.documents || []).filter((x) => x.type === 'selfie' || x.type === 'vehicle_photo');
+    const mapped = fromDocs.length
+      ? fromDocs.map((x) => ({
+          label: x.label || (x.type === 'selfie' ? 'Profil rasmi' : 'Mashina rasmi'),
+          url: x.url,
+          type: x.type,
+        }))
+      : [
+          ...(d.photo_url ? [{ label: 'Profil rasmi', url: d.photo_url, type: 'selfie' }] : []),
+          ...(d.vehicle?.photo_url ? [{ label: 'Mashina rasmi', url: d.vehicle.photo_url, type: 'vehicle_photo' }] : []),
+        ];
+    return uniqueDocs(mapped).filter((x) => !(skipSelfie && x.type === 'selfie' && d.photo_url));
+  }
+
+  function exportButtons(prefix) {
+    return `<div class="row-actions">
+      <button type="button" class="btn ghost sm" data-export="${prefix}" data-fmt="csv">CSV eksport</button>
+      <button type="button" class="btn ghost sm" data-export="${prefix}" data-fmt="xls">Excel eksport</button>
+    </div>`;
+  }
+
+  function bindExports(root) {
+    root.querySelectorAll('[data-export]').forEach((b) => {
+      b.onclick = async () => {
+        const kind = b.dataset.export;
+        const fmt = b.dataset.fmt || 'csv';
+        const names = {
+          overview: `safaron_statistika.${fmt === 'xls' ? 'xls' : 'csv'}`,
+          trips: `safaron_safarlar.${fmt === 'xls' ? 'xls' : 'csv'}`,
+          users: `safaron_foydalanuvchilar.${fmt === 'xls' ? 'xls' : 'csv'}`,
+          drivers: `safaron_haydovchilar.${fmt === 'xls' ? 'xls' : 'csv'}`,
+        };
+        try {
+          await window.SafaronAdminApi.download(`/admin/export/${kind}?fmt=${fmt}`, names[kind] || `safaron.${fmt}`);
+        } catch (ex) {
+          alert(ex.message || 'Eksport xato');
+        }
+      };
+    });
+  }
+
   function showApp() {
     loginView.classList.add('hidden');
     appView.classList.remove('hidden');
@@ -197,9 +258,11 @@
     const passengers = d.passengers_total || 0;
     const reqRows = d.recent_requests || [];
     const userRows = d.recent_users || [];
+    const tripRows = d.recent_trips || [];
     const refs = d.top_referrers || [];
     const wds = d.withdrawals || [];
     content.innerHTML = u.pageLayout({
+      toolbarHtml: u.toolbar(`${exportButtons('overview')} ${exportButtons('trips')} ${exportButtons('users')}`),
       stats: u.statRow([
         u.statCard({ label: 'Jami foydalanuvchilar', value: users, sub: `Faol ${d.users_active || 0}`, tone: 'blue', icon: '☺' }),
         u.statCard({ label: 'Haydovchilar', value: drivers, sub: `Onlayn ${d.drivers_online || 0}`, tone: 'green', icon: '▣' }),
@@ -246,7 +309,13 @@
         { label: 'Rol', key: 'role', render: (r) => u.pill(r.role === 'driver' ? 'DRIVER' : 'ACTIVE', [r.role === 'driver' ? 'Haydovchi' : 'Yo‘lovchi', r.role === 'driver' ? 'blue' : 'ok']) },
         { label: 'Vaqt', key: 'time' },
       ], userRows), '<button class="linkish" data-go="users">→</button>')}
-      ${u.card('Tezkor havolalar', `<div style="display:grid;gap:8px">
+      ${u.card('Oxirgi haydovchi e’lonlari', u.table([
+        { label: 'Marshrut', key: 'route', render: (r) => u.esc(r.route) },
+        { label: 'Narx', key: 'price', render: (r) => u.money(r.price) },
+        { label: 'Holat', key: 'status', render: (r) => u.pill(r.status) },
+      ], tripRows), '<button class="linkish" data-go="trips">→</button>')}
+    </div>` + `<div class="page-grid" style="grid-template-columns:1fr;margin-top:14px">
+      ${u.card('Tezkor havolalar', `<div style="display:flex;flex-wrap:wrap;gap:8px">
         <button class="btn ghost" data-go="bonuses">★ Bonus tizimi</button>
         <button class="btn ghost" data-go="referrals">⚭ Referal tizimi</button>
         <button class="btn ghost" data-go="fraud">✓ Tasdiqlash</button>
@@ -254,6 +323,7 @@
       </div>`)}
     </div>`;
     content.querySelectorAll('[data-go]').forEach((b) => { b.onclick = () => navigate(b.dataset.go); });
+    bindExports(content);
     const labels = (d.chart_days || []).map((x) => x.label);
     u.makeChart(document.getElementById('chartLine'), {
       type: 'line',
@@ -285,19 +355,7 @@
 
   async function openDriverDetail(id, { forReview = false } = {}) {
     const d = await api()(`/admin/drivers/${id}`);
-    const docs = [
-      ...(d.photo_url ? [{ label: 'Profil / selfie', url: d.photo_url, type: 'selfie' }] : []),
-      ...(d.vehicle?.photo_url ? [{ label: 'Mashina rasmi', url: d.vehicle.photo_url, type: 'vehicle_photo' }] : []),
-      ...((d.documents || []).filter((x) => x.type === 'selfie' || x.type === 'vehicle_photo')),
-    ];
-    // unique by url
-    const seen = new Set();
-    const uniqDocs = docs.filter((x) => {
-      const k = x.url || x.type;
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
+    const uniqDocs = collectDriverDocs(d, { skipSelfie: Boolean(d.photo_url) });
 
     openModal({
       title: `${esc(d.full_name)} · #${d.id}`,
@@ -375,6 +433,10 @@
       title: `${esc(u.full_name)} · #${u.id}`,
       sub: `${esc(u.phone)} · rol: ${esc(u.active_role)}`,
       bodyHtml: `
+        ${u.avatar_url ? `<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <img src="${esc(u.avatar_url)}" alt="" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid var(--border)" onerror="this.style.display='none'" />
+          <div><div style="font-weight:800">${esc(u.full_name)}</div><div class="muted">${esc(u.phone)}</div></div>
+        </div>` : ''}
         <div class="kv">
           <div class="item"><div class="k">Telefon</div><div class="v">${esc(u.phone)}</div></div>
           <div class="item"><div class="k">Rol</div><div class="v">${esc(u.active_role)}</div></div>
@@ -388,6 +450,9 @@
         <div class="section-title">So‘rovlar tarixi</div>
         <div class="table-wrap"><table><thead><tr><th>ID</th><th>Yo‘nalish</th><th>Narx</th><th>Status</th><th>Vaqt</th></tr></thead>
         <tbody>${(u.requests || []).map((r) => `<tr><td>${r.id}</td><td>${esc(r.from_text)} → ${esc(r.to_text)}</td><td>${money(r.agreed_price || r.offered_price)}</td><td>${badge(r.status)}</td><td>${dt(r.created_at)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Yo‘q</td></tr>'}</tbody></table></div>
+        <div class="section-title">Haydovchi e’lonlari</div>
+        <div class="table-wrap"><table><thead><tr><th>ID</th><th>Yo‘nalish</th><th>Narx</th><th>Joy</th><th>Status</th></tr></thead>
+        <tbody>${(u.trips || []).map((t) => `<tr><td>${t.id}</td><td>${esc(t.from_text)} → ${esc(t.to_text)}</td><td>${money(t.price)}</td><td>${t.seats_available}/${t.seats_total}</td><td>${badge(t.status)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Yo‘q</td></tr>'}</tbody></table></div>
       `,
       actionsHtml: `
         <button class="btn ${u.is_blocked ? '' : 'danger'}" id="actBlock">${u.is_blocked ? '✅ Faollashtirish' : '⛔ Bloklash'}</button>
@@ -480,10 +545,10 @@
           { key: 'drivers', label: 'Haydovchilar' },
           { key: 'blocked', label: 'Bloklangan' },
         ], tab),
-        toolbarHtml: u.toolbar(u.searchInput('userSearch', 'Ism, telefon bo‘yicha qidirish...')),
+        toolbarHtml: u.toolbar(`${u.searchInput('userSearch', 'Ism, telefon bo‘yicha qidirish...')} ${exportButtons('users')}`),
         main: u.card('Foydalanuvchilar ro‘yxati', u.table([
           { label: 'ID', key: 'id', render: (r) => `#${r.id}` },
-          { label: 'Foydalanuvchi', key: 'full_name', render: (r) => u.userCell(r.full_name, r.phone) },
+          { label: 'Foydalanuvchi', key: 'full_name', render: (r) => u.userCell(r.full_name, r.phone, r.avatar_url) },
           { label: 'Telefon', key: 'phone' },
           { label: 'Rol', key: 'active_role', render: (r) => u.pill(r.active_role === 'driver' ? 'DRIVER' : 'ACTIVE', [r.active_role === 'driver' ? 'Haydovchi' : 'Yo‘lovchi', r.active_role === 'driver' ? 'blue' : 'ok']) },
           { label: 'Referal kod', key: 'referral_code', render: (r) => r.referral_code ? `<code>${u.esc(r.referral_code)}</code>` : '—' },
@@ -500,6 +565,7 @@
         si.oninput = () => { clearTimeout(t); t = setTimeout(() => { q = si.value.trim(); draw(); }, 350); };
       }
       content.querySelectorAll('[data-user]').forEach((b) => b.onclick = () => openUserDetail(b.dataset.user));
+      bindExports(content);
     };
     await draw();
   }
@@ -511,6 +577,7 @@
     const forReview = status === 'PENDING';
     const online = rows.filter((d) => d.is_online).length;
     content.innerHTML = u.pageLayout({
+      toolbarHtml: forReview ? '' : u.toolbar(exportButtons('drivers')),
       stats: u.statRow([
         u.statCard({ label: forReview ? 'Kutilayotgan arizalar' : 'Jami haydovchilar', value: rows.length, sub: forReview ? 'Ko‘rib chiqish kerak' : 'Ro‘yxat', tone: forReview ? 'orange' : 'blue', icon: '▣' }),
         u.statCard({ label: 'Onlayn', value: online, sub: 'Hozir faol', tone: 'green', icon: '🟢' }),
@@ -530,6 +597,7 @@
         ], rows)),
     });
     content.querySelectorAll('[data-drv]').forEach((b) => b.onclick = () => openDriverDetail(b.dataset.drv, { forReview }));
+    bindExports(content);
   }
 
   async function renderDocuments() {
@@ -537,11 +605,7 @@
     const rows = await api()('/admin/drivers');
     const cards = [];
     rows.forEach((d) => {
-      const docs = [
-        ...(d.photo_url ? [{ label: 'Profil rasmi', url: d.photo_url }] : []),
-        ...(d.vehicle?.photo_url ? [{ label: 'Mashina rasmi', url: d.vehicle.photo_url }] : []),
-        ...((d.documents || []).filter((x) => x.type === 'selfie' || x.type === 'vehicle_photo').map((x) => ({ label: x.type === 'selfie' ? 'Profil rasmi' : 'Mashina rasmi', url: x.url }))),
-      ];
+      const docs = collectDriverDocs(d);
       docs.forEach((doc) => {
         if (!doc.url) return;
         cards.push({ driverId: d.id, name: d.full_name, phone: d.phone, status: d.status, ...doc });
@@ -571,28 +635,37 @@
   async function renderTrips() {
     const u = UI();
     const rows = await api()('/admin/trips');
-    const active = rows.filter((t) => ['OPEN', 'FULL', 'IN_PROGRESS'].includes(t.status));
+    const active = rows.filter((t) => ['OPEN', 'FULL', 'IN_PROGRESS', 'CONFIRMED', 'SEARCHING', 'DRIVER_ACCEPTED'].includes(t.status));
     content.innerHTML = u.pageLayout({
+      toolbarHtml: u.toolbar(exportButtons('trips')),
       stats: u.statRow([
-        u.statCard({ label: 'Jami safarlar', value: rows.length, sub: 'E’lonlar', tone: 'blue', icon: '→' }),
+        u.statCard({ label: 'Jami safarlar', value: rows.length, sub: 'E’lon va so‘rovlar', tone: 'blue', icon: '→' }),
         u.statCard({ label: 'Faol', value: active.length, sub: 'Ochiq / jarayonda', tone: 'green', icon: '◎' }),
         u.statCard({ label: 'Yakunlangan', value: rows.filter((t) => t.status === 'COMPLETED').length, sub: 'Status', tone: 'violet', icon: '✓' }),
-        u.statCard({ label: 'Bekor', value: rows.filter((t) => t.status === 'CANCELLED').length, sub: 'Status', tone: 'red', icon: '✕' }),
+        u.statCard({ label: 'Bekor', value: rows.filter((t) => ['CANCELLED', 'EXPIRED'].includes(t.status)).length, sub: 'Status', tone: 'red', icon: '✕' }),
       ]),
       main: u.card('Safarlar ro‘yxati', u.table([
         { label: 'ID', key: 'id', render: (r) => `#${r.id}` },
+        { label: 'Turi', key: 'kind', render: (r) => u.pill(r.kind === 'request' ? 'SO‘ROV' : 'E’LON') },
         { label: 'Marshrut', key: 'from_text', render: (r) => u.routeCell(r.from_text, r.to_text) },
+        { label: 'Haydovchi', key: 'driver_name', render: (r) => u.esc(r.driver_name || '—') },
+        { label: 'Yo‘lovchi', key: 'passenger_name', render: (r) => u.esc(r.passenger_name || '—') },
         { label: 'Vaqt', key: 'scheduled_at', render: (r) => u.dt(r.scheduled_at) },
-        { label: 'Joylar', key: 'seats_available', render: (r) => `${r.seats_available}/${r.seats_total}` },
         { label: 'Narx', key: 'price', render: (r) => u.money(r.price) },
         { label: 'Holat', key: 'status', render: (r) => u.pill(r.status) },
-        { label: '', key: 'x', render: (r) => `<button class="btn sm primary" data-trip="${r.id}">Batafsil</button>` },
+        { label: '', key: 'x', render: (r) => `<button class="btn sm primary" data-kind="${r.kind || 'trip'}" data-id="${r.id}">Batafsil</button>` },
       ], rows)),
       side: u.card('Faol safarlar', active.length ? active.slice(0, 8).map((t) =>
         `<div style="padding:8px 0;border-bottom:1px solid var(--border)"><b>#${t.id}</b> ${u.esc(t.from_text)} → ${u.esc(t.to_text)}<br>${u.pill(t.status)}</div>`
       ).join('') : '<p class="muted">Faol safar yo‘q</p>'),
     });
-    content.querySelectorAll('[data-trip]').forEach((b) => b.onclick = () => openTripDetail(b.dataset.trip));
+    content.querySelectorAll('[data-id]').forEach((b) => {
+      b.onclick = () => {
+        if (b.dataset.kind === 'request') openRequestDetail(b.dataset.id);
+        else openTripDetail(b.dataset.id);
+      };
+    });
+    bindExports(content);
   }
 
   async function renderRequests() {

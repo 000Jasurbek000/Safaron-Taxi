@@ -33,5 +33,28 @@
     return data;
   }
 
-  window.SafaronAdminApi = { api, token, API_BASE };
+  async function download(path, filename) {
+    const headers = {};
+    if (token()) headers.Authorization = `Bearer ${token()}`;
+    let res;
+    try {
+      res = await fetch(`${API_BASE}${path}`, { headers });
+    } catch (e) {
+      throw new Error('Serverga ulanib bo‘lmadi.');
+    }
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(formatDetail(data.detail) || ('Eksport xato ' + res.status));
+    }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  }
+
+  window.SafaronAdminApi = { api, token, API_BASE, download };
 })();

@@ -61,6 +61,7 @@ def seed(db: Session) -> None:
         "location_approval_required": "true",
         "booking_timeout_sec": str(settings.booking_timeout_sec),
         "timezone": "Asia/Tashkent",
+        "vehicle_models": "Chevrolet Cobalt,Chevrolet Nexia,Chevrolet Spark,Chevrolet Tracker,BYD Chazor,Chevrolet Lacetti",
     }
     for k, v in defaults.items():
         if not db.query(SystemSetting).filter(SystemSetting.key == k).first():

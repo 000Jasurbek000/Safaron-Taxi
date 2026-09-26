@@ -7,7 +7,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.deps import get_current_user
 from app.models import OtpCode, User
-from app.schemas import OkResponse, SendOtpIn, SendOtpOut, SignInIn, TokenResponse, UserOut, VerifyOtpIn
+from app.schemas import OkResponse, PhoneLookupOut, SendOtpIn, SendOtpOut, SignInIn, TokenResponse, UserOut, VerifyOtpIn
 from app.security import create_access_token
 from app.services.phone import normalize_phone, validate_name
 from app.services.rewards import attach_referral, ensure_code
@@ -87,8 +87,7 @@ def sign_in(body: SignInIn, db: Session = Depends(get_db)):
         ensure_code(db, user)
         attach_referral(db, user, body.referral_code)
     else:
-        user.first_name = first
-        user.last_name = last
+        # Telefon unique: mavjud user — ism/familiyani ustiga yozilmaydi.
         if (body.referral_code or "").strip():
             attach_referral(db, user, body.referral_code)
     user.last_seen_at = datetime.utcnow()
@@ -97,6 +96,25 @@ def sign_in(body: SignInIn, db: Session = Depends(get_db)):
     user = db.query(User).options(joinedload(User.driver_profile)).filter(User.id == user.id).one()
     token = create_access_token(str(user.id), claims={"typ": "user"})
     return TokenResponse(access_token=token, user=user_out(user))
+
+
+@router.get("/lookup", response_model=PhoneLookupOut)
+def lookup_phone(phone: str, db: Session = Depends(get_db)):
+    """Mavjud telefon — eski profilni qaytaradi (token talab qilmaydi)."""
+    p = normalize_phone(phone)
+    if not p:
+        raise HTTPException(400, "Telefon raqami noto‘g‘ri.")
+    user = db.query(User).filter(User.phone == p, User.deleted_at.is_(None)).first()
+    if user is None:
+        return PhoneLookupOut(exists=False)
+    return PhoneLookupOut(
+        exists=True,
+        first_name=user.first_name or "",
+        last_name=user.last_name or "",
+        full_name=user.full_name or "",
+        phone_display=user.phone or p,
+        active_role=user.active_role or "passenger",
+    )
 
 
 @router.get("/me", response_model=UserOut)

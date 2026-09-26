@@ -116,8 +116,8 @@
     return `<div class="data-table"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
   }
 
-  function userCell(name, sub) {
-    return `<div class="user-cell">${avatar(name)}<div><div class="u-name">${esc(name)}</div>${sub ? `<div class="u-sub">${esc(sub)}</div>` : ''}</div></div>`;
+  function userCell(name, sub, url) {
+    return `<div class="user-cell">${avatar(name, url)}<div><div class="u-name">${esc(name)}</div>${sub ? `<div class="u-sub">${esc(sub)}</div>` : ''}</div></div>`;
   }
 
   function routeCell(from, to) {

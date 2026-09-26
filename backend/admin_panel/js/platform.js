@@ -13,16 +13,38 @@
   }
 
   async function renderBonuses(content, api, u) {
-    const [stats, pending, approved, dash] = await Promise.all([
+    const [stats, pending, approved, dash, flags] = await Promise.all([
       api('/admin/platform/stats'),
       api('/admin/platform/bonuses?status=PENDING'),
       api('/admin/platform/bonuses?status=APPROVED'),
       api('/admin/dashboard'),
+      api('/admin/platform/flags'),
     ]);
+    const bonusFlag = (flags || []).find((f) => f.key === 'bonus');
+    const referralFlag = (flags || []).find((f) => f.key === 'referral');
+    const withdrawalFlag = (flags || []).find((f) => f.key === 'withdrawal');
     let tab = 'PENDING';
     const draw = async () => {
       const d = await api(`/admin/platform/bonuses?status=${tab}`);
       content.innerHTML = u.pageLayout({
+        toolbarHtml: u.toolbar(`
+          <div class="flag-row" style="margin:0;gap:16px;flex-wrap:wrap">
+            <div>
+              <b>Bonus tizimi</b>
+              <div class="muted" style="font-size:12px">${bonusFlag?.enabled ? 'Ilovada bonus menyusi ochiq' : 'Bonus menyusi yashirin'}</div>
+            </div>
+            <button type="button" class="toggle ${bonusFlag?.enabled ? 'on' : ''}" data-flag="bonus" aria-label="bonus"></button>
+            <div>
+              <b>Referal</b>
+              <div class="muted" style="font-size:12px">${referralFlag?.enabled ? 'Yoqilgan' : 'O‘chirilgan'}</div>
+            </div>
+            <button type="button" class="toggle ${referralFlag?.enabled ? 'on' : ''}" data-flag="referral" aria-label="referral"></button>
+            <div>
+              <b>Yechim</b>
+              <div class="muted" style="font-size:12px">${withdrawalFlag?.enabled ? 'Yoqilgan' : 'O‘chirilgan'}</div>
+            </div>
+            <button type="button" class="toggle ${withdrawalFlag?.enabled ? 'on' : ''}" data-flag="withdrawal" aria-label="withdrawal"></button>
+          </div>`),
         stats: u.statRow([
           u.statCard({ label: 'Jami berilgan bonus', value: u.money(stats.bonus_paid), sub: 'Tasdiqlangan', tone: 'green', icon: '★' }),
           u.statCard({ label: 'Kutilayotgan', value: stats.pending_bonus, sub: 'Tasdiqlash kerak', tone: 'orange', icon: '⏳' }),
@@ -61,6 +83,17 @@
         const note = prompt('Rad sababi') || '';
         await api('/admin/platform/bonuses/' + b.dataset.no + '/reject', { method: 'POST', body: JSON.stringify({ note }) });
         draw();
+      });
+      content.querySelectorAll('[data-flag]').forEach((el) => {
+        el.onclick = async () => {
+          const key = el.dataset.flag;
+          const on = !el.classList.contains('on');
+          await api('/admin/platform/flags/' + key, { method: 'PATCH', body: JSON.stringify({ enabled: on }) });
+          el.classList.toggle('on', on);
+          if (key === 'bonus' && bonusFlag) bonusFlag.enabled = on;
+          if (key === 'referral' && referralFlag) referralFlag.enabled = on;
+          if (key === 'withdrawal' && withdrawalFlag) withdrawalFlag.enabled = on;
+        };
       });
       const days = dash.chart_days || [];
       u.makeChart(document.getElementById('chartBonusLine'), {

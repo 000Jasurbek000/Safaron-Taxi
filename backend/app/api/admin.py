@@ -1,7 +1,10 @@
+import csv
+import io
 import json
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -165,6 +168,16 @@ def dashboard(admin: AdminUser = Depends(get_current_admin), db: Session = Depen
         "withdrawals": [
             {"id": w.id, "user_id": w.user_id, "amount": w.amount, "status": w.status, "telegram": w.telegram_username}
             for w in db.query(WithdrawalRequest).order_by(WithdrawalRequest.id.desc()).limit(6).all()
+        ],
+        "recent_trips": [
+            {
+                "id": t.id,
+                "route": f"{t.from_text or '—'} → {t.to_text or '—'}",
+                "price": t.price,
+                "status": t.status,
+                "time": t.created_at.strftime("%H:%M") if t.created_at else "",
+            }
+            for t in db.query(Trip).order_by(Trip.id.desc()).limit(6).all()
         ],
     }
 
@@ -343,6 +356,27 @@ def user_detail(user_id: int, admin: AdminUser = Depends(get_current_admin), db:
             }
             for r in reqs
         ],
+        "trips": [
+            {
+                "id": t.id,
+                "from_text": t.from_text,
+                "to_text": t.to_text,
+                "price": t.price,
+                "status": t.status,
+                "scheduled_at": t.scheduled_at,
+                "seats_available": t.seats_available,
+                "seats_total": t.seats_total,
+            }
+            for t in (
+                db.query(Trip)
+                .filter(Trip.driver_id == u.driver_profile.id)
+                .order_by(Trip.id.desc())
+                .limit(15)
+                .all()
+                if u.driver_profile
+                else []
+            )
+        ],
     }
 
 
@@ -480,6 +514,8 @@ def users(
                 "is_active": u.is_active,
                 "driver_status": u.driver_profile.status if u.driver_profile else None,
                 "referral_code": u.referral_code,
+                "avatar_url": _doc_url(u.avatar_path),
+                "rating_avg": u.rating_avg if u.rating_avg is not None else 5.0,
                 "created_at": u.created_at,
                 "last_seen_at": u.last_seen_at,
             }
@@ -643,22 +679,59 @@ def reject_location(location_id: int, admin: AdminUser = Depends(get_current_adm
 
 @router.get("/trips")
 def admin_trips(admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
-    rows = db.query(Trip).order_by(Trip.id.desc()).limit(200).all()
-    return [
+    published = db.query(Trip).order_by(Trip.id.desc()).limit(200).all()
+    dids = {t.driver_id for t in published}
+    drivers = {
+        d.id: d
+        for d in db.query(DriverProfile)
+        .options(joinedload(DriverProfile.user))
+        .filter(DriverProfile.id.in_(dids or {0}))
+        .all()
+    }
+    items = [
         {
             "id": t.id,
+            "kind": "trip",
             "driver_id": t.driver_id,
+            "driver_name": drivers[t.driver_id].user.full_name if t.driver_id in drivers and drivers[t.driver_id].user else None,
+            "driver_phone": drivers[t.driver_id].user.phone if t.driver_id in drivers and drivers[t.driver_id].user else None,
             "from_text": t.from_text,
             "to_text": t.to_text,
+            "from_note": t.from_note,
+            "to_note": t.to_note,
+            "note": t.note,
             "scheduled_at": t.scheduled_at,
             "seats_available": t.seats_available,
             "seats_total": t.seats_total,
             "price": t.price,
             "status": t.status,
             "created_at": t.created_at,
+            "passenger_name": None,
         }
-        for t in rows
+        for t in published
     ]
+    reqs = db.query(TripRequest).order_by(TripRequest.id.desc()).limit(200).all()
+    pids = {r.passenger_id for r in reqs}
+    names = {u.id: u.full_name for u in db.query(User).filter(User.id.in_(pids or {0})).all()}
+    for r in reqs:
+        items.append(
+            {
+                "id": r.id,
+                "kind": "request",
+                "driver_id": r.selected_driver_id,
+                "from_text": r.from_text,
+                "to_text": r.to_text,
+                "scheduled_at": r.scheduled_at,
+                "seats_available": r.passengers_count,
+                "seats_total": r.passengers_count,
+                "price": r.agreed_price or r.offered_price or 0,
+                "status": r.status,
+                "created_at": r.created_at,
+                "passenger_name": names.get(r.passenger_id, "—"),
+            }
+        )
+    items.sort(key=lambda x: x.get("created_at") or datetime.min, reverse=True)
+    return items[:200]
 
 
 @router.get("/requests")
@@ -722,6 +795,119 @@ def set_settings(payload: dict, admin: AdminUser = Depends(get_current_admin), d
     _log(db, admin, "settings_update", "settings", None, None, payload)
     db.commit()
     return OkResponse(ok=True)
+
+
+def _export_file(filename: str, headers: list[str], rows: list[list], excel: bool = False):
+    buf = io.StringIO()
+    buf.write("\ufeff")
+    writer = csv.writer(buf)
+    writer.writerow(headers)
+    writer.writerows(rows)
+    mime = "application/vnd.ms-excel" if excel else "text/csv; charset=utf-8"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type=mime,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _excel(fmt: str) -> bool:
+    return (fmt or "csv").lower() in {"xls", "xlsx", "excel"}
+
+
+@router.get("/export/overview")
+def export_overview(fmt: str = "csv", admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
+    today = datetime.utcnow().date()
+    rows = [
+        ["Ko‘rsatkich", "Qiymat"],
+        ["Jami foydalanuvchilar", db.query(User).count()],
+        ["Faol foydalanuvchilar", db.query(User).filter(User.is_active.is_(True), User.is_blocked.is_(False)).count()],
+        ["Haydovchilar (tasdiqlangan)", db.query(DriverProfile).filter(DriverProfile.status == "APPROVED").count()],
+        ["Haydovchilar (kutilmoqda)", db.query(DriverProfile).filter(DriverProfile.status == "PENDING").count()],
+        ["Onlayn haydovchi", db.query(DriverProfile).filter(DriverProfile.is_online.is_(True), DriverProfile.status == "APPROVED").count()],
+        ["Jami e’lon safarlar", db.query(Trip).count()],
+        ["Faol e’lonlar", db.query(Trip).filter(Trip.status.in_(["OPEN", "FULL", "IN_PROGRESS"])).count()],
+        ["Bugungi e’lonlar", db.query(Trip).filter(func.date(Trip.created_at) == today).count()],
+        ["Jami buyurtmalar", db.query(TripRequest).count()],
+        ["Bugungi buyurtmalar", db.query(TripRequest).filter(func.date(TripRequest.created_at) == today).count()],
+        ["Jami tushum", db.query(func.coalesce(func.sum(DriverProfile.total_earnings), 0)).scalar() or 0],
+        ["Bonus berilgan", db.query(func.coalesce(func.sum(BonusTransaction.amount), 0)).filter(BonusTransaction.status == "APPROVED", BonusTransaction.amount > 0).scalar() or 0],
+        ["Kutilayotgan bonus", db.query(BonusTransaction).filter(BonusTransaction.status == "PENDING").count()],
+        ["Eksport vaqti", datetime.utcnow().isoformat(timespec="seconds")],
+    ]
+    excel = _excel(fmt)
+    return _export_file(f"safaron_statistika.{ 'xls' if excel else 'csv' }", rows[0], rows[1:], excel)
+
+
+@router.get("/export/trips")
+def export_trips(fmt: str = "csv", admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
+    items = admin_trips(admin, db)
+    excel = _excel(fmt)
+    headers = ["ID", "Turi", "Haydovchi", "Telefon", "Qayerdan", "Qayerga", "Vaqt", "Narx", "Joylar", "Holat", "Yaratilgan"]
+    rows = [
+        [
+            x.get("id"),
+            x.get("kind"),
+            x.get("driver_name") or x.get("passenger_name") or "",
+            x.get("driver_phone") or "",
+            x.get("from_text"),
+            x.get("to_text"),
+            x.get("scheduled_at"),
+            x.get("price"),
+            f"{x.get('seats_available')}/{x.get('seats_total')}",
+            x.get("status"),
+            x.get("created_at"),
+        ]
+        for x in items
+    ]
+    return _export_file(f"safaron_safarlar.{ 'xls' if excel else 'csv' }", headers, rows, excel)
+
+
+@router.get("/export/users")
+def export_users(fmt: str = "csv", admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
+    rows = db.query(User).order_by(User.id.desc()).limit(5000).all()
+    excel = _excel(fmt)
+    headers = ["ID", "Ism", "Familiya", "Telefon", "Rol", "Blok", "Referal", "Reyting", "Ro‘yxat", "Oxirgi faollik"]
+    data = [
+        [
+            u.id,
+            u.first_name,
+            u.last_name,
+            u.phone,
+            u.active_role,
+            "ha" if u.is_blocked else "yo‘q",
+            u.referral_code or "",
+            u.rating_avg,
+            u.created_at,
+            u.last_seen_at,
+        ]
+        for u in rows
+    ]
+    return _export_file(f"safaron_foydalanuvchilar.{ 'xls' if excel else 'csv' }", headers, data, excel)
+
+
+@router.get("/export/drivers")
+def export_drivers(fmt: str = "csv", admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
+    rows = db.query(DriverProfile).options(joinedload(DriverProfile.user), joinedload(DriverProfile.vehicle)).order_by(DriverProfile.id.desc()).limit(2000).all()
+    excel = _excel(fmt)
+    headers = ["ID", "Ism", "Telefon", "Status", "Online", "Tajriba", "Reyting", "Safarlar", "Daromad", "Mashina", "Raqam"]
+    data = [
+        [
+            d.id,
+            d.user.full_name if d.user else "",
+            d.user.phone if d.user else "",
+            d.status,
+            "ha" if d.is_online else "yo‘q",
+            d.experience_years,
+            d.rating_avg,
+            d.trips_count,
+            d.total_earnings,
+            d.vehicle.model_name if d.vehicle else "",
+            d.vehicle.plate if d.vehicle else "",
+        ]
+        for d in rows
+    ]
+    return _export_file(f"safaron_haydovchilar.{ 'xls' if excel else 'csv' }", headers, data, excel)
 
 
 @router.get("/logs")

@@ -32,9 +32,12 @@ def trip_out(trip: Trip, driver: DriverProfile | None = None, vehicle: Vehicle |
     return TripOut(
         id=trip.id,
         driver_id=trip.driver_id,
+        driver_user_id=u.id if u else None,
         driver_name=u.full_name if u else "",
-        driver_rating=d.rating_avg if d else 5.0,
+        driver_rating=(d.rating_avg if d else 5.0) or 5.0,
+        driver_reviews=d.rating_count if d else 0,
         driver_phone=u.phone if u else "",
+        driver_photo=(d.photo_path if d else None) or (u.avatar_path if u else None),
         car_model=v.model_name if v else "",
         plate=v.plate if v else "",
         car_photo=v.photo_path if v else None,
