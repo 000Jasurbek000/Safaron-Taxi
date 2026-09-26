@@ -21,7 +21,7 @@ class SafaronLogo extends StatelessWidget {
         assetPath,
         width: size,
         height: size,
-        fit: BoxFit.cover,
+        fit: BoxFit.contain,
         errorBuilder: (_, __, ___) => Icon(Icons.local_taxi_rounded, size: size * 0.6),
       ),
     );
