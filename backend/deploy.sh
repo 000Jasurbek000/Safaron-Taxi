@@ -1,56 +1,97 @@
 #!/usr/bin/env bash
-# SAFARON API — serverga yangilash
+# SAFARON TAXI — production deploy (backend only)
+# Run from: /home/safaronu/Safaron-Taxi/backend
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")" && pwd)"
-cd "$ROOT"
+BACKEND_DIR="/home/safaronu/Safaron-Taxi/backend"
+VENV_ACTIVATE="/home/safaronu/virtualenv/Safaron-Taxi/backend/3.12/bin/activate"
+DOMAIN="https://safaron.uz"
 
-echo "==> Git pull"
-if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  git pull --ff-only
-else
-  echo "Bu papka git repo emas. Avval:"
-  echo "  git clone https://github.com/000Jasurbek000/Safaron-Taxi.git"
+step=0
+fail() {
+  echo
+  echo "ERROR: $1"
+  echo "Deploy to‘xtadi (bosqich ${step})."
+  echo ".env, data/ va uploads/ o‘zgartirilmadi."
   exit 1
-fi
-
-echo "==> Virtualenv"
-if [ ! -d ".venv" ]; then
-  python3 -m venv .venv
-fi
-# shellcheck disable=SC1091
-source .venv/bin/activate
-pip install -q -r requirements.txt
-
-if [ ! -f ".env" ]; then
-  cp .env.example .env
-  echo "Diqqat: .env yaratildi. SECRET_KEY va parolni o‘zgartiring."
-fi
-
-mkdir -p data uploads/drivers uploads/vehicles uploads/docs
-
-restart_uvicorn() {
-  echo "==> Uvicorn qayta ishga tushirilmoqda (port 8000)"
-  if command -v fuser >/dev/null 2>&1; then
-    fuser -k 8000/tcp >/dev/null 2>&1 || true
-  else
-    pkill -f "uvicorn app.main:app" >/dev/null 2>&1 || true
-  fi
-  sleep 1
-  nohup .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 \
-    > data/uvicorn.log 2>&1 &
-  echo "PID $!"
 }
 
-echo "==> Restart"
-if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q '^safaron'; then
-  sudo systemctl restart safaron
-  sudo systemctl --no-pager --lines=8 status safaron || true
+ok() {
+  echo "  OK: $1"
+}
+
+begin() {
+  step=$((step + 1))
+  echo
+  echo "[${step}] $1"
+}
+
+trap 'fail "kutilmagan xatolik (exit $?)"' ERR
+
+echo "========================================"
+echo " SAFARON backend deploy"
+echo " ${BACKEND_DIR}"
+echo "========================================"
+
+begin "Backend katalogini tekshirish"
+if [ ! -d "${BACKEND_DIR}" ]; then
+  fail "${BACKEND_DIR} topilmadi"
+fi
+cd "${BACKEND_DIR}" || fail "backend katalogiga o‘tib bo‘lmadi"
+if [ ! -f "app/main.py" ] || [ ! -f "requirements.txt" ]; then
+  fail "backend fayllari yo‘q (app/main.py yoki requirements.txt)"
+fi
+ok "ishchi katalog: $(pwd)"
+
+begin "Muhim production fayllarni saqlash (.env, data, uploads)"
+if [ ! -f ".env" ]; then
+  echo "  OGOHLANTIRISH: .env yo‘q. GitHub'dan olinmaydi — serverda qo‘lda yarating."
 else
-  restart_uvicorn
+  ok ".env saqlanadi"
+fi
+mkdir -p data uploads/drivers uploads/vehicles uploads/docs tmp
+ok "data/ va uploads/ saqlanadi (o‘chirilmaydi)"
+
+begin "Git pull (faqat kod, production fayllarsiz)"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [ -z "${REPO_ROOT}" ]; then
+  fail "git repository topilmadi"
+fi
+ok "repo: ${REPO_ROOT}"
+git -C "${REPO_ROOT}" pull --ff-only || fail "git pull muvaffaqiyatsiz"
+ok "kod yangilandi"
+
+begin "Virtualenv: Python 3.12"
+if [ ! -f "${VENV_ACTIVATE}" ]; then
+  fail "virtualenv topilmadi: ${VENV_ACTIVATE}"
+fi
+# shellcheck disable=SC1090
+source "${VENV_ACTIVATE}" || fail "virtualenv aktivlashmadi"
+ok "$(python -c 'import sys; print(sys.executable)')"
+ok "$(python -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')"
+
+begin "Dependencylar (requirements.txt)"
+python -m pip install -r requirements.txt || fail "pip install xato"
+ok "requirements o‘rnatildi"
+
+begin "Backend import testi (app.main:app)"
+python -c "from app.main import app; print(app.title)" || fail "app import qilinmadi"
+ok "FastAPI application yuklandi"
+
+begin "Passenger restart"
+touch tmp/restart.txt || fail "tmp/restart.txt yozilmadi"
+ok "tmp/restart.txt yangilandi"
+if command -v passenger-config >/dev/null 2>&1; then
+  passenger-config restart-app "${BACKEND_DIR}" >/dev/null 2>&1 && ok "passenger-config restart-app" || true
 fi
 
-echo "Tayyor."
-echo "  API:   http://$(hostname -I 2>/dev/null | awk '{print $1}'):8000"
-echo "  Admin: http://$(hostname -I 2>/dev/null | awk '{print $1}'):8000/admin/"
-echo "Brauzerda Ctrl+F5 (hard refresh) qiling — eski logo keshda qolmasin."
+echo
+echo "========================================"
+echo " SUCCESS"
+echo " Backend: ${BACKEND_DIR}"
+echo " Domain:  ${DOMAIN}"
+echo " Admin:   ${DOMAIN}/admin/"
+echo " Docs:    ${DOMAIN}/docs"
+echo " Health:  ${DOMAIN}/health"
+echo "========================================"
+echo "Brauzerda Ctrl+F5 qiling (logo kesh)."

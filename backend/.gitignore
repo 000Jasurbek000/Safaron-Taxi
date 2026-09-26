@@ -1,0 +1,32 @@
+# Secrets — never commit production env
+.env
+.env.local
+.env.production
+!.env.example
+
+# Virtualenvs
+.venv/
+.venv312/
+venv/
+
+# Python cache
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Runtime data — stay on the server only
+data/
+uploads/
+releases/
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs and Passenger restart stamp
+*.log
+tmp/restart.txt

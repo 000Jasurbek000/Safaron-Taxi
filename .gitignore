@@ -59,5 +59,6 @@ SAFARON.apk
 *.sqlite
 *.sqlite3
 backend/data/
+backend/tmp/restart.txt
 android/.gradle/
 !backend/.env.example
