@@ -13,39 +13,38 @@
   }
 
   async function renderBonuses(content, api, u) {
-    const [stats, pending, approved, dash, flags] = await Promise.all([
+    const [stats, pending, approved, dash] = await Promise.all([
       api('/admin/platform/stats'),
       api('/admin/platform/bonuses?status=PENDING'),
       api('/admin/platform/bonuses?status=APPROVED'),
       api('/admin/dashboard'),
-      api('/admin/platform/flags'),
     ]);
-    const bonusFlag = (flags || []).find((f) => f.key === 'bonus');
-    const referralFlag = (flags || []).find((f) => f.key === 'referral');
-    const withdrawalFlag = (flags || []).find((f) => f.key === 'withdrawal');
+    let flags = [];
+    try { flags = await api('/admin/platform/flags'); } catch (_) { flags = []; }
+    const flagOn = (key) => {
+      const f = (flags || []).find((x) => x.key === key);
+      return f ? !!f.enabled : true;
+    };
     let tab = 'PENDING';
+    const bonusControls = () => {
+      const on = flagOn('bonus');
+      return `<div style="margin-bottom:14px">${u.card('Bonus tizimini yoqish / o‘chirish', `
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:16px">
+          <div style="flex:1;min-width:240px">
+            <div style="font-size:22px;font-weight:800;color:${on ? '#047857' : '#b91c1c'}">${on ? 'YOQILGAN' : 'O‘CHIRILGAN'}</div>
+            <div class="muted">Ilovada bonus menyusi ${on ? 'ko‘rinadi' : 'yashirin'}</div>
+          </div>
+          <button type="button" class="btn ${on ? 'danger' : 'success'}" data-flag="bonus" data-on="${on ? '0' : '1'}">${on ? 'O‘chirish' : 'Yoqish'}</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:14px">
+          <button type="button" class="btn ${flagOn('referral') ? 'success' : 'ghost'} sm" data-flag="referral" data-on="${flagOn('referral') ? '0' : '1'}">Referal: ${flagOn('referral') ? 'yoqilgan — o‘chirish' : 'o‘chirilgan — yoqish'}</button>
+          <button type="button" class="btn ${flagOn('withdrawal') ? 'success' : 'ghost'} sm" data-flag="withdrawal" data-on="${flagOn('withdrawal') ? '0' : '1'}">Yechim: ${flagOn('withdrawal') ? 'yoqilgan — o‘chirish' : 'o‘chirilgan — yoqish'}</button>
+        </div>`)}</div>`;
+    };
     const draw = async () => {
       const d = await api(`/admin/platform/bonuses?status=${tab}`);
       content.innerHTML = u.pageLayout({
-        toolbarHtml: u.toolbar(`
-          <div class="flag-row" style="margin:0;gap:16px;flex-wrap:wrap">
-            <div>
-              <b>Bonus tizimi</b>
-              <div class="muted" style="font-size:12px">${bonusFlag?.enabled ? 'Ilovada bonus menyusi ochiq' : 'Bonus menyusi yashirin'}</div>
-            </div>
-            <button type="button" class="toggle ${bonusFlag?.enabled ? 'on' : ''}" data-flag="bonus" aria-label="bonus"></button>
-            <div>
-              <b>Referal</b>
-              <div class="muted" style="font-size:12px">${referralFlag?.enabled ? 'Yoqilgan' : 'O‘chirilgan'}</div>
-            </div>
-            <button type="button" class="toggle ${referralFlag?.enabled ? 'on' : ''}" data-flag="referral" aria-label="referral"></button>
-            <div>
-              <b>Yechim</b>
-              <div class="muted" style="font-size:12px">${withdrawalFlag?.enabled ? 'Yoqilgan' : 'O‘chirilgan'}</div>
-            </div>
-            <button type="button" class="toggle ${withdrawalFlag?.enabled ? 'on' : ''}" data-flag="withdrawal" aria-label="withdrawal"></button>
-          </div>`),
-        stats: u.statRow([
+        stats: bonusControls() + u.statRow([
           u.statCard({ label: 'Jami berilgan bonus', value: u.money(stats.bonus_paid), sub: 'Tasdiqlangan', tone: 'green', icon: '★' }),
           u.statCard({ label: 'Kutilayotgan', value: stats.pending_bonus, sub: 'Tasdiqlash kerak', tone: 'orange', icon: '⏳' }),
           u.statCard({ label: 'Tasdiqlangan tranzaksiya', value: approved.total, sub: 'Jami yozuv', tone: 'blue', icon: '✓' }),
@@ -87,12 +86,12 @@
       content.querySelectorAll('[data-flag]').forEach((el) => {
         el.onclick = async () => {
           const key = el.dataset.flag;
-          const on = !el.classList.contains('on');
+          const on = el.dataset.on === '1';
           await api('/admin/platform/flags/' + key, { method: 'PATCH', body: JSON.stringify({ enabled: on }) });
-          el.classList.toggle('on', on);
-          if (key === 'bonus' && bonusFlag) bonusFlag.enabled = on;
-          if (key === 'referral' && referralFlag) referralFlag.enabled = on;
-          if (key === 'withdrawal' && withdrawalFlag) withdrawalFlag.enabled = on;
+          const row = (flags || []).find((f) => f.key === key);
+          if (row) row.enabled = on;
+          else flags.push({ key, enabled: on, description: key });
+          draw();
         };
       });
       const days = dash.chart_days || [];

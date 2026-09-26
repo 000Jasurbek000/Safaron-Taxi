@@ -208,7 +208,7 @@
       trips: ['Safarlar', 'Tayyor e’lonlar va bandlar'],
       requests: ['Buyurtmalar', 'Yo‘lovchi so‘rovlari'],
       locations: ['Joylar', 'Canonical locations + alias'],
-      pendingLocations: ['Yangi joylar', 'Foydalanuvchi takliflari — tasdiqlash'],
+      pendingLocations: ['Joylar', 'Barcha joylar'],
       notifications: ['Xabarnomalar', 'Foydalanuvchilarga xabar'],
       settings: ['Tizim sozlamalari', 'Tizim parametrlari'],
       logs: ['Loglar', 'Admin harakatlari'],
@@ -231,8 +231,7 @@
       else if (page === 'documents') await renderDocuments();
       else if (page === 'trips') await renderTrips();
       else if (page === 'requests') await renderRequests();
-      else if (page === 'locations') await renderLocations(false);
-      else if (page === 'pendingLocations') await renderLocations(true);
+      else if (page === 'locations' || page === 'pendingLocations') await renderLocations();
       else if (page === 'notifications') renderNotify();
       else if (page === 'settings') await renderSettings();
       else if (page === 'logs') await renderLogs();
@@ -291,8 +290,9 @@
         <div style="display:grid;gap:10px">
           <div><span class="muted">Haydovchi arizasi</span><div style="font-size:22px;font-weight:800">${d.driver_pending || 0}</div></div>
           <div><span class="muted">Bonus tasdiqi</span><div style="font-size:22px;font-weight:800">${d.pending_bonus || 0}</div></div>
-          <div><span class="muted">Yangi joylar</span><div style="font-size:22px;font-weight:800">${d.locations_pending || 0}</div></div>
+          <div><span class="muted">Joylar (kutilmoqda)</span><div style="font-size:22px;font-weight:800">${d.locations_pending || 0}</div></div>
           <button class="btn primary sm" data-go="applications">Arizalarni ko‘rish</button>
+          <button class="btn ghost sm" data-go="locations">Joylar</button>
         </div>`) + u.card('Top referrers', u.table([
         { label: 'Foydalanuvchi', key: 'name', render: (r) => u.userCell(r.name) },
         { label: 'Kod', key: 'code', render: (r) => `<code>${u.esc(r.code)}</code>` },
@@ -431,15 +431,21 @@
     const u = await api()(`/admin/users/${id}`);
     openModal({
       title: `${esc(u.full_name)} · #${u.id}`,
-      sub: `${esc(u.phone)} · rol: ${esc(u.active_role)}`,
+      sub: `${esc(u.phone)} · ${esc(u.role_label || (u.has_driver ? 'Yo‘lovchi / Haydovchi' : 'Yo‘lovchi'))}`,
       bodyHtml: `
-        ${u.avatar_url ? `<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-          <img src="${esc(u.avatar_url)}" alt="" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid var(--border)" onerror="this.style.display='none'" />
-          <div><div style="font-weight:800">${esc(u.full_name)}</div><div class="muted">${esc(u.phone)}</div></div>
-        </div>` : ''}
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          ${u.avatar_url
+            ? `<img src="${esc(u.avatar_url)}" alt="" data-img="${esc(u.avatar_url)}" style="width:88px;height:88px;border-radius:50%;object-fit:cover;border:2px solid var(--border);cursor:zoom-in" onerror="this.outerHTML='<div class=avatar style=display:grid;place-items:center>☺</div>'" />`
+            : `<div class="avatar" style="display:grid;place-items:center">☺</div>`}
+          <div>
+            <div style="font-weight:800">${esc(u.full_name)}</div>
+            <div class="muted">${esc(u.phone)}</div>
+            <div style="margin-top:6px">${u.has_driver ? badge('Yo‘lovchi / Haydovchi') : badge('Yo‘lovchi')}</div>
+          </div>
+        </div>
         <div class="kv">
           <div class="item"><div class="k">Telefon</div><div class="v">${esc(u.phone)}</div></div>
-          <div class="item"><div class="k">Rol</div><div class="v">${esc(u.active_role)}</div></div>
+          <div class="item"><div class="k">Rol</div><div class="v">${esc(u.role_label || (u.has_driver ? 'Yo‘lovchi / Haydovchi' : 'Yo‘lovchi'))}</div></div>
           <div class="item"><div class="k">Til</div><div class="v">${esc(u.language)}</div></div>
           <div class="item"><div class="k">Blok</div><div class="v">${u.is_blocked ? badge('BLOCKED') : badge('ACTIVE')}</div></div>
           <div class="item"><div class="k">Reyting</div><div class="v">${u.rating_avg} (${u.rating_count})</div></div>
@@ -536,7 +542,7 @@
         stats: u.statRow([
           u.statCard({ label: 'Jami', value: data.total, sub: 'Ko‘rsatilmoqda', tone: 'blue', icon: '☺' }),
           u.statCard({ label: 'Faol', value: data.items.filter((x) => !x.is_blocked).length, sub: 'Joriy sahifa', tone: 'green', icon: '✓' }),
-          u.statCard({ label: 'Haydovchi', value: data.items.filter((x) => x.active_role === 'driver').length, sub: 'Joriy sahifa', tone: 'violet', icon: '▣' }),
+          u.statCard({ label: 'Haydovchi', value: data.items.filter((x) => x.has_driver).length, sub: 'Joriy sahifa', tone: 'violet', icon: '▣' }),
           u.statCard({ label: 'Bloklangan', value: data.items.filter((x) => x.is_blocked).length, sub: 'Joriy sahifa', tone: 'red', icon: '⛔' }),
         ]),
         tabsHtml: u.tabs([
@@ -550,7 +556,9 @@
           { label: 'ID', key: 'id', render: (r) => `#${r.id}` },
           { label: 'Foydalanuvchi', key: 'full_name', render: (r) => u.userCell(r.full_name, r.phone, r.avatar_url) },
           { label: 'Telefon', key: 'phone' },
-          { label: 'Rol', key: 'active_role', render: (r) => u.pill(r.active_role === 'driver' ? 'DRIVER' : 'ACTIVE', [r.active_role === 'driver' ? 'Haydovchi' : 'Yo‘lovchi', r.active_role === 'driver' ? 'blue' : 'ok']) },
+          { label: 'Rol', key: 'role_label', render: (r) => r.has_driver
+            ? u.pill('DRIVER', ['Yo‘lovchi / Haydovchi', 'blue'])
+            : u.pill('ACTIVE', ['Yo‘lovchi', 'ok']) },
           { label: 'Referal kod', key: 'referral_code', render: (r) => r.referral_code ? `<code>${u.esc(r.referral_code)}</code>` : '—' },
           { label: 'Ro‘yxat', key: 'created_at', render: (r) => u.dt(r.created_at) },
           { label: 'Holat', key: 'is_blocked', render: (r) => u.pill(r.is_blocked ? 'BLOCKED' : 'ACTIVE') },
@@ -709,24 +717,24 @@
     draw();
   }
 
-  async function renderLocations(pending) {
+  async function renderLocations() {
     const u = UI();
-    const rows = await api()(`/admin/locations${pending ? '?pending=true' : ''}`);
+    const rows = await api()('/admin/locations');
     content.innerHTML = u.pageLayout({
       stats: u.statRow([
-        u.statCard({ label: pending ? 'Kutilayotgan joylar' : 'Jami joylar', value: rows.length, sub: pending ? 'Tasdiqlash kerak' : 'Canonical', tone: pending ? 'orange' : 'blue', icon: '⌖' }),
+        u.statCard({ label: 'Jami joylar', value: rows.length, sub: 'Ro‘yxat', tone: 'blue', icon: '⌖' }),
         u.statCard({ label: 'Tasdiqlangan', value: rows.filter((l) => l.is_approved).length, sub: 'Joriy ro‘yxat', tone: 'green', icon: '✓' }),
         u.statCard({ label: 'Koordinatali', value: rows.filter((l) => l.latitude != null).length, sub: 'GPS bor', tone: 'violet', icon: '◎' }),
         u.statCard({ label: 'Aliasli', value: rows.filter((l) => (l.aliases || []).length).length, sub: 'Qidiruv', tone: 'orange', icon: '≡' }),
       ]),
-      main: (pending ? '' : u.card('Yangi joy qo‘shish', `<div class="page-toolbar" style="margin:0">
+      main: (u.card('Yangi joy qo‘shish', `<div class="page-toolbar" style="margin:0">
         <input id="locName" placeholder="Nomi" style="flex:1" />
         <select id="locType"><option>village</option><option>mahalla</option><option>city</option><option>district</option><option>OFY</option><option>landmark</option><option>other</option></select>
         <input id="locLat" placeholder="Lat" style="width:100px" />
         <input id="locLng" placeholder="Lng" style="width:100px" />
         <input id="locAliases" placeholder="Aliaslar (vergul bilan)" style="flex:1;min-width:180px" />
         <button class="btn primary" id="createLocBtn">Saqlash</button>
-      </div>`)) + u.card(pending ? 'Yangi joy takliflari' : 'Joylar ro‘yxati', u.table([
+      </div>`)) + u.card('Joylar ro‘yxati', u.table([
         { label: 'ID', key: 'id', render: (r) => `#${r.id}` },
         { label: 'Nomi', key: 'name' },
         { label: 'Turi', key: 'type' },
@@ -761,7 +769,7 @@
       cell.querySelectorAll('button').forEach((b) => {
         b.onclick = async () => {
           await api()(`/admin/locations/${id}/${b.dataset.act === 'ok' ? 'approve' : 'reject'}`, { method: 'POST' });
-          navigate('pendingLocations');
+          navigate('locations');
         };
       });
     });

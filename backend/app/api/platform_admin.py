@@ -83,8 +83,27 @@ def stats(admin: AdminUser = Depends(get_current_admin), db: Session = Depends(g
     }
 
 
+_DEFAULT_FLAGS = (
+    ("bonus", True, "Bonus menyusi"),
+    ("referral", True, "Taklif kodi"),
+    ("withdrawal", True, "Bonus yechish"),
+)
+
+
+def _ensure_flags(db: Session):
+    existing = {f.key: f for f in db.query(FeatureFlag).all()}
+    added = False
+    for key, enabled, desc in _DEFAULT_FLAGS:
+        if key not in existing:
+            db.add(FeatureFlag(key=key, enabled=enabled, description=desc))
+            added = True
+    if added:
+        db.commit()
+
+
 @router.get("/flags")
 def flags(admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
+    _ensure_flags(db)
     return [{"key": f.key, "enabled": f.enabled, "description": f.description} for f in db.query(FeatureFlag).all()]
 
 
@@ -92,12 +111,16 @@ def flags(admin: AdminUser = Depends(get_current_admin), db: Session = Depends(g
 def set_flag(key: str, body: FlagIn, request: Request, admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
     row = db.query(FeatureFlag).filter(FeatureFlag.key == key).first()
     if not row:
-        raise HTTPException(404, "Flag topilmadi")
-    before = row.enabled
-    row.enabled = body.enabled
+        row = FeatureFlag(key=key, enabled=body.enabled, description=key)
+        db.add(row)
+        before = None
+    else:
+        before = row.enabled
+        row.enabled = body.enabled
+    db.flush()
     _log(db, admin, request, "feature_flag", {"enabled": before}, {"enabled": body.enabled}, "feature_flag", row.id)
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "key": key, "enabled": row.enabled}
 
 
 @router.get("/bonus-rules")

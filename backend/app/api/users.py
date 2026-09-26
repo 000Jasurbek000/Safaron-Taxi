@@ -1,8 +1,9 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session, joinedload
 
+from app.api.drivers import _save_upload
 from app.database import get_db
 from app.deps import get_current_user
 from app.models import OtpCode, User
@@ -35,6 +36,19 @@ def update_me(body: ProfileUpdateIn, user: User = Depends(get_current_user), db:
         if not user.driver_profile:
             raise HTTPException(400, "Tajriba faqat haydovchi profilida saqlanadi.")
         user.driver_profile.experience_years = body.experience_years
+    db.commit()
+    user = db.query(User).options(joinedload(User.driver_profile)).filter(User.id == user.id).one()
+    return user_out(user)
+
+
+@router.post("/me/avatar", response_model=UserOut)
+async def upload_avatar(
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    path = await _save_upload(file, "avatars")
+    user.avatar_path = path
     db.commit()
     user = db.query(User).options(joinedload(User.driver_profile)).filter(User.id == user.id).one()
     return user_out(user)

@@ -338,7 +338,9 @@ def user_detail(user_id: int, admin: AdminUser = Depends(get_current_admin), db:
         "is_active": u.is_active,
         "rating_avg": u.rating_avg,
         "rating_count": u.rating_count,
-        "avatar_url": _doc_url(u.avatar_path),
+        "avatar_url": _doc_url(u.avatar_path) or (_doc_url(u.driver_profile.photo_path) if u.driver_profile else None),
+        "has_driver": u.driver_profile is not None,
+        "role_label": "Yo‘lovchi / Haydovchi" if u.driver_profile else "Yo‘lovchi",
         "created_at": u.created_at,
         "last_seen_at": u.last_seen_at,
         "driver_status": u.driver_profile.status if u.driver_profile else None,
@@ -493,9 +495,9 @@ def users(
         like = f"%{q}%"
         query = query.filter((User.first_name.ilike(like)) | (User.last_name.ilike(like)) | (User.phone.ilike(like)))
     if role == "driver":
-        query = query.filter(User.active_role == "driver")
+        query = query.filter(User.driver_profile.has())
     elif role in ("passenger", "user"):
-        query = query.filter(User.active_role != "driver")
+        query = query.filter(~User.driver_profile.has())
     if status == "blocked":
         query = query.filter(User.is_blocked.is_(True))
     elif status == "active":
@@ -504,17 +506,21 @@ def users(
     rows = query.order_by(User.id.desc()).offset((page - 1) * limit).limit(limit).all()
     items = []
     for u in rows:
+        has_driver = u.driver_profile is not None
+        avatar = _doc_url(u.avatar_path) or (_doc_url(u.driver_profile.photo_path) if has_driver else None)
         items.append(
             {
                 "id": u.id,
                 "full_name": u.full_name,
                 "phone": u.phone,
                 "active_role": u.active_role,
+                "has_driver": has_driver,
+                "role_label": "Yo‘lovchi / Haydovchi" if has_driver else "Yo‘lovchi",
                 "is_blocked": u.is_blocked,
                 "is_active": u.is_active,
-                "driver_status": u.driver_profile.status if u.driver_profile else None,
+                "driver_status": u.driver_profile.status if has_driver else None,
                 "referral_code": u.referral_code,
-                "avatar_url": _doc_url(u.avatar_path),
+                "avatar_url": avatar,
                 "rating_avg": u.rating_avg if u.rating_avg is not None else 5.0,
                 "created_at": u.created_at,
                 "last_seen_at": u.last_seen_at,

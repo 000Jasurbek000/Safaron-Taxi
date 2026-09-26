@@ -39,8 +39,8 @@ class VerifyOtpIn(BaseModel):
 
 class SignInIn(BaseModel):
     phone: str
-    first_name: str
-    last_name: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     referral_code: Optional[str] = None
 
 

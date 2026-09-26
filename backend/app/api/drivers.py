@@ -51,7 +51,7 @@ async def apply_driver(
     plate: str = Form(...),
     seats: int = Form(...),
     color: str | None = Form(None),
-    selfie: UploadFile = File(...),
+    selfie: UploadFile | None = File(None),
     vehicle_photo: UploadFile = File(...),
     driver_license: UploadFile | None = File(None),
     vehicle_registration: UploadFile | None = File(None),
@@ -65,7 +65,7 @@ async def apply_driver(
     if len(model) < 2:
         raise HTTPException(400, "Mashina nomini kiriting.")
     if not validate_plate(plate):
-        raise HTTPException(400, "Davlat raqami noto‘g‘ri.")
+        raise HTTPException(400, "Davlat raqami noto‘g‘ri. Namuna: 00 A 000 AA yoki 00 000 AAA.")
     plate_n = normalize_plate(plate)
     if seats < 1 or seats > 10:
         raise HTTPException(400, "Yo‘lovchi sig‘imi noto‘g‘ri (1–10).")
@@ -75,7 +75,11 @@ async def apply_driver(
     if existing_plate and (not driver or existing_plate.driver_id != driver.id):
         raise HTTPException(400, "Bu davlat raqami allaqachon ro‘yxatdan o‘tgan.")
 
-    selfie_path = await _save_upload(selfie, "drivers")
+    selfie_path = None
+    if selfie is not None and (selfie.filename or "").strip():
+        selfie_path = await _save_upload(selfie, "drivers")
+    elif user.avatar_path:
+        selfie_path = user.avatar_path
     car_path = await _save_upload(vehicle_photo, "vehicles")
     lic_path = await _save_upload(driver_license, "docs") if driver_license and driver_license.filename else None
     reg_path = await _save_upload(vehicle_registration, "docs") if vehicle_registration and vehicle_registration.filename else None
@@ -93,7 +97,8 @@ async def apply_driver(
     driver.status = "PENDING"
     driver.rejection_reason = None
     driver.experience_years = experience_years
-    driver.photo_path = selfie_path
+    if selfie_path:
+        driver.photo_path = selfie_path
     db.flush()
 
     vehicle = db.query(Vehicle).filter(Vehicle.driver_id == driver.id).first()
@@ -119,7 +124,8 @@ async def apply_driver(
     if ins_path:
         db.add(DriverDocument(driver_id=driver.id, doc_type="insurance", file_path=ins_path))
 
-    user.avatar_path = selfie_path
+    if selfie is not None and (selfie.filename or "").strip() and selfie_path:
+        user.avatar_path = selfie_path
     db.commit()
     user = db.query(User).options(joinedload(User.driver_profile)).filter(User.id == user.id).one()
     return user_out(user)

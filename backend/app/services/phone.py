@@ -2,10 +2,11 @@ import re
 
 PHONE_RE = re.compile(r"^\+998\d{9}$")
 NAME_RE = re.compile(r"^[A-Za-zА-Яа-яЁёЎўҚқҒғҲҳʼ'’\- ]{2,60}$")
-PLATE_RE = re.compile(
-    r"^[0-9]{2}[A-Z]?[0-9]{3}[A-Z]{2,3}$|^[0-9]{2}[A-Z]{1}[0-9]{3}[A-Z]{2}$|^[0-9]{2}[A-Z]{3}[0-9]{3}$|^[A-Z0-9\-]{5,12}$",
-    re.I,
-)
+PLATE_RE = re.compile(r"^(\d{2})([A-Z]?)(\d{3})([A-Z]{2,3})$", re.I)
+VALID_PLATE_REGIONS = {
+    "01", "10", "20", "25", "30", "35", "40", "45", "50", "55",
+    "60", "65", "70", "75", "80", "85", "90", "95",
+}
 
 
 def normalize_phone(raw: str) -> str | None:
@@ -40,10 +41,43 @@ def validate_name(value: str) -> str | None:
     return cleaned
 
 
+def snap_plate_region(code: str) -> str:
+    digits = re.sub(r"\D", "", code or "")
+    if len(digits) != 2:
+        return digits
+    if digits in VALID_PLATE_REGIONS:
+        return digits
+    try:
+        n = int(digits)
+    except ValueError:
+        return digits
+    best, best_diff = None, 99
+    for v in VALID_PLATE_REGIONS:
+        diff = abs(int(v) - n)
+        if best is None or diff < best_diff or (diff == best_diff and int(v) < int(best)):
+            best, best_diff = v, diff
+    if best is not None and best_diff <= 5:
+        return best
+    return digits
+
+
 def normalize_plate(raw: str) -> str:
-    return re.sub(r"\s+", "", (raw or "").upper())
+    plate = re.sub(r"\s+", "", (raw or "").upper())
+    m = PLATE_RE.match(plate)
+    if not m:
+        return plate
+    region = snap_plate_region(m.group(1))
+    return f"{region}{m.group(2).upper()}{m.group(3)}{m.group(4).upper()}"
 
 
 def validate_plate(raw: str) -> bool:
     plate = normalize_plate(raw)
-    return bool(plate) and bool(PLATE_RE.match(plate)) and 5 <= len(plate) <= 12
+    m = PLATE_RE.match(plate)
+    if not m:
+        return False
+    region, mid, _digits, end = m.group(1), m.group(2).upper(), m.group(3), m.group(4).upper()
+    if region not in VALID_PLATE_REGIONS:
+        return False
+    if mid:
+        return len(end) == 2
+    return len(end) == 3

@@ -74,20 +74,20 @@ def sign_in(body: SignInIn, db: Session = Depends(get_db)):
     phone = normalize_phone(body.phone)
     if not phone:
         raise HTTPException(400, "Telefon raqami noto‘g‘ri.")
-    first = validate_name(body.first_name or "")
-    last = validate_name(body.last_name or "")
-    if not first or not last:
-        raise HTTPException(400, "Ism va familiya to‘g‘ri kiritilishi shart.")
 
     user = db.query(User).options(joinedload(User.driver_profile)).filter(User.phone == phone).first()
     if user is None:
+        first = validate_name(body.first_name or "")
+        last = validate_name(body.last_name or "")
+        if not first or not last:
+            raise HTTPException(400, "Yangi raqam uchun ism va familiya to‘g‘ri kiritilishi shart.")
         user = User(phone=phone, first_name=first, last_name=last)
         db.add(user)
         db.flush()
         ensure_code(db, user)
         attach_referral(db, user, body.referral_code)
     else:
-        # Telefon unique: mavjud user — ism/familiyani ustiga yozilmaydi.
+        # Bir xil telefon = bitta akkaunt. FIO qanday bo‘lishidan qat’i nazar.
         if (body.referral_code or "").strip():
             attach_referral(db, user, body.referral_code)
     user.last_seen_at = datetime.utcnow()
