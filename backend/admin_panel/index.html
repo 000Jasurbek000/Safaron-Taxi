@@ -11,7 +11,7 @@
   <title>SAFARON Admin</title>
 
   <link rel="icon" href="img/logo.png" type="image/png" />
-  <link rel="stylesheet" href="css/app.css?v=6" />
+  <link rel="stylesheet" href="css/app.css?v=7" />
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
@@ -87,6 +87,8 @@
 
         <button type="button" data-page="logs"><span class="ico">≡</span> Loglar</button>
 
+        <button type="button" data-page="profile"><span class="ico">☺</span> Profil</button>
+
       </nav>
 
       <div class="side-foot">
@@ -119,13 +121,13 @@
 
         <div class="topbar-actions">
 
-          <div class="admin-chip">
+          <button type="button" class="admin-chip" id="adminChip" title="Profil">
 
             <span class="u-avatar ph" id="adminAvatar">A</span>
 
             <span id="adminName">Admin</span>
 
-          </div>
+          </button>
 
         </div>
 
@@ -149,7 +151,7 @@
 
   <script src="js/api.js"></script>
 
-  <script src="js/app.js?v=4"></script>
+  <script src="js/app.js?v=5"></script>
 
   <script src="js/platform.js?v=4"></script>
 

@@ -25,10 +25,25 @@ from app.models import (
     Vehicle,
     WithdrawalRequest,
 )
-from app.schemas import AdminLoginIn, AdminTokenOut, LocationCreateIn, NotifyBroadcastIn, OkResponse, StatusUpdateIn
-from app.security import create_access_token, verify_password
+from app.schemas import (
+    AdminLoginIn,
+    AdminOut,
+    AdminPasswordChangeIn,
+    AdminProfileUpdateIn,
+    AdminTokenOut,
+    LocationCreateIn,
+    NotifyBroadcastIn,
+    OkResponse,
+    StatusUpdateIn,
+)
+from app.security import create_access_token
+from app.services.admin_auth import (
+    admin_public,
+    authenticate_admin,
+    change_admin_password,
+    update_admin_profile,
+)
 from app.services.notify import notify
-from app.services.phone import normalize_phone
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -48,17 +63,50 @@ def _log(db: Session, admin: AdminUser, action: str, object_type: str | None = N
 
 @router.post("/auth/login", response_model=AdminTokenOut)
 def admin_login(body: AdminLoginIn, db: Session = Depends(get_db)):
-    phone = normalize_phone(body.phone) or body.phone.strip()
-    admin = db.query(AdminUser).filter(AdminUser.phone == phone).first()
-    if not admin or not verify_password(body.password, admin.password_hash):
+    admin = authenticate_admin(db, body.phone, body.password)
+    if not admin:
         raise HTTPException(401, "Login yoki parol noto‘g‘ri.")
     if not admin.is_active:
         raise HTTPException(403, "Admin akkaunti o‘chirilgan.")
     token = create_access_token(str(admin.id), claims={"typ": "admin", "role": admin.role})
-    return AdminTokenOut(
-        access_token=token,
-        admin={"id": admin.id, "phone": admin.phone, "full_name": admin.full_name, "role": admin.role},
+    return AdminTokenOut(access_token=token, admin=AdminOut(**admin_public(admin)))
+
+
+@router.get("/auth/me", response_model=AdminOut)
+def admin_me(admin: AdminUser = Depends(get_current_admin)):
+    return AdminOut(**admin_public(admin))
+
+
+@router.patch("/auth/me", response_model=AdminOut)
+def admin_update_me(
+    body: AdminProfileUpdateIn,
+    admin: AdminUser = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    before = {"full_name": admin.full_name, "email": admin.email, "phone": admin.phone}
+    update_admin_profile(
+        db,
+        admin,
+        full_name=body.full_name,
+        email=body.email,
+        phone=body.phone,
     )
+    _log(db, admin, "admin_profile_update", "admin", admin.id, before, admin_public(admin))
+    db.commit()
+    db.refresh(admin)
+    return AdminOut(**admin_public(admin))
+
+
+@router.post("/auth/password", response_model=OkResponse)
+def admin_change_password(
+    body: AdminPasswordChangeIn,
+    admin: AdminUser = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    change_admin_password(admin, body.current_password, body.new_password, body.confirm_password)
+    _log(db, admin, "admin_password_change", "admin", admin.id, None, {"changed": True})
+    db.commit()
+    return OkResponse(ok=True, message="Parol yangilandi.")
 
 
 @router.get("/dashboard")

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -267,10 +267,32 @@ class AdminLoginIn(BaseModel):
     password: str
 
 
+class AdminOut(BaseModel):
+    id: int
+    phone: str
+    email: Optional[str] = None
+    full_name: str
+    role: str
+    is_active: bool
+    created_at: Optional[datetime] = None
+
+
 class AdminTokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    admin: dict[str, Any]
+    admin: AdminOut
+
+
+class AdminProfileUpdateIn(BaseModel):
+    full_name: Optional[str] = Field(default=None, min_length=2, max_length=120)
+    email: Optional[str] = None
+    phone: Optional[str] = None
+
+
+class AdminPasswordChangeIn(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_password: str
 
 
 class StatusUpdateIn(BaseModel):

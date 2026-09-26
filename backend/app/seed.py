@@ -1,10 +1,9 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.models import (
-    AdminUser,
     BonusRule,
     DriverProfile,
     FeatureFlag,
@@ -15,9 +14,8 @@ from app.models import (
     User,
     Vehicle,
 )
+from app.services.admin_auth import ensure_seed_admin
 from app.services.rewards import ensure_code
-from app.security import hash_password
-from app.services.phone import normalize_phone
 
 
 SEED_LOCATIONS = [
@@ -40,17 +38,8 @@ SEED_LOCATIONS = [
 
 def seed(db: Session) -> None:
     settings = get_settings()
-    phone = normalize_phone(settings.admin_phone) or settings.admin_phone
-    admin = db.query(AdminUser).filter(AdminUser.phone == phone).first()
-    if not admin:
-        db.add(
-            AdminUser(
-                phone=phone,
-                password_hash=hash_password(settings.admin_password),
-                full_name="Super Admin",
-                role="SUPER_ADMIN",
-            )
-        )
+    # .env paroli faqat admin yo‘q bo‘lsa ishlatiladi — mavjud hash qayta yozilmaydi.
+    ensure_seed_admin(db, settings.admin_phone, settings.admin_password)
 
     defaults = {
         "app_name": "SAFARON",

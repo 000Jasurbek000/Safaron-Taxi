@@ -39,9 +39,7 @@
     loginView.classList.add('hidden');
     appView.classList.remove('hidden');
     const admin = JSON.parse(localStorage.getItem('safaron_admin') || '{}');
-    adminName.textContent = admin.full_name || 'Admin';
-    const av = document.getElementById('adminAvatar');
-    if (av) av.textContent = UI().initials(admin.full_name || 'Admin');
+    applyAdminChip(admin);
     navigate('dashboard');
   }
   function showLogin() {
@@ -74,7 +72,15 @@
     }
   }
 
+  function applyAdminChip(admin) {
+    adminName.textContent = admin.full_name || 'Admin';
+    const av = document.getElementById('adminAvatar');
+    if (av) av.textContent = UI().initials(admin.full_name || 'Admin');
+  }
+
   document.getElementById('loginForm').addEventListener('submit', doLogin);
+  const adminChip = document.getElementById('adminChip');
+  if (adminChip) adminChip.addEventListener('click', () => navigate('profile'));
   document.getElementById('logoutBtn').addEventListener('click', () => {
     localStorage.removeItem('safaron_admin_token');
     localStorage.removeItem('safaron_admin');
@@ -150,6 +156,7 @@
       withdrawals: ['To‘lovlar va yechimlar', 'Bonus yechish so‘rovlari'],
       fraud: ['Tasdiqlash', 'Shubhali safarlar'],
       flags: ['Ilova sozlamalari', 'Funksiyalarni yoqish va o‘chirish'],
+      profile: ['Profil', 'Shaxsiy ma’lumotlar va parol'],
     };
     pageTitle.textContent = meta[page]?.[0] || page;
     pageSub.textContent = meta[page]?.[1] || '';
@@ -168,6 +175,7 @@
       else if (page === 'notifications') renderNotify();
       else if (page === 'settings') await renderSettings();
       else if (page === 'logs') await renderLogs();
+      else if (page === 'profile') await renderProfile();
       else if (window.SafaronPlatform) await window.SafaronPlatform.render(page, content, api());
     } catch (ex) {
       const msg = String(ex.message || '');
@@ -730,6 +738,74 @@
       content.querySelectorAll('input[data-k]').forEach((el) => { payload[el.dataset.k] = el.value; });
       await api()('/admin/settings', { method: 'POST', body: JSON.stringify(payload) });
       alert('Saqlandi');
+    };
+  }
+
+  async function renderProfile() {
+    const u = UI();
+    const me = await api()('/admin/auth/me');
+    localStorage.setItem('safaron_admin', JSON.stringify(me));
+    applyAdminChip(me);
+    content.innerHTML = u.pageLayout({
+      stats: u.statRow([
+        u.statCard({ label: 'Rol', value: me.role === 'SUPER_ADMIN' ? 'Super' : 'Admin', sub: me.role, tone: 'blue', icon: '☺' }),
+        u.statCard({ label: 'Holat', value: me.is_active ? 'Faol' : 'O‘chirilgan', sub: `ID #${me.id}`, tone: me.is_active ? 'green' : 'red', icon: '✓' }),
+      ], 'cols-2'),
+      main: u.card('Shaxsiy ma’lumotlar', `<div class="form-grid" style="max-width:520px">
+        <div><label>To‘liq ism</label><input id="pfName" value="${u.esc(me.full_name || '')}" /></div>
+        <div><label>Telefon</label><input id="pfPhone" value="${u.esc(me.phone || '')}" /></div>
+        <div><label>Email</label><input id="pfEmail" type="email" value="${u.esc(me.email || '')}" placeholder="ixtiyoriy" /></div>
+        <p class="muted" style="margin:0">Rol va ID o‘zgarmaydi. Boshqa admin profiliga kira olmaysiz.</p>
+        <button class="btn primary" id="saveProfile">💾 Saqlash</button>
+        <p id="pfMsg" class="muted"></p>
+      </div>`),
+      side: u.card('Parolni o‘zgartirish', `<div class="form-grid">
+        <div><label>Joriy parol</label><input id="pwCur" type="password" autocomplete="current-password" /></div>
+        <div><label>Yangi parol</label><input id="pwNew" type="password" autocomplete="new-password" /></div>
+        <div><label>Yangi parolni tasdiqlang</label><input id="pwConfirm" type="password" autocomplete="new-password" /></div>
+        <p class="muted" style="margin:0">Kamida 8 belgi, harf va raqam. Parol hech qachon ochiq saqlanmaydi.</p>
+        <button class="btn primary" id="savePass">🔒 Parolni yangilash</button>
+        <p id="pwMsg" class="muted"></p>
+      </div>`),
+    });
+    document.getElementById('saveProfile').onclick = async () => {
+      const msg = document.getElementById('pfMsg');
+      msg.textContent = '';
+      try {
+        const updated = await api()('/admin/auth/me', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            full_name: document.getElementById('pfName').value.trim(),
+            phone: document.getElementById('pfPhone').value.trim(),
+            email: document.getElementById('pfEmail').value.trim(),
+          }),
+        });
+        localStorage.setItem('safaron_admin', JSON.stringify(updated));
+        applyAdminChip(updated);
+        msg.textContent = 'Profil saqlandi.';
+      } catch (ex) {
+        msg.textContent = ex.message || 'Saqlanmadi.';
+      }
+    };
+    document.getElementById('savePass').onclick = async () => {
+      const msg = document.getElementById('pwMsg');
+      msg.textContent = '';
+      try {
+        const res = await api()('/admin/auth/password', {
+          method: 'POST',
+          body: JSON.stringify({
+            current_password: document.getElementById('pwCur').value,
+            new_password: document.getElementById('pwNew').value,
+            confirm_password: document.getElementById('pwConfirm').value,
+          }),
+        });
+        document.getElementById('pwCur').value = '';
+        document.getElementById('pwNew').value = '';
+        document.getElementById('pwConfirm').value = '';
+        msg.textContent = res.message || 'Parol yangilandi.';
+      } catch (ex) {
+        msg.textContent = ex.message || 'Parol yangilanmadi.';
+      }
     };
   }
 
