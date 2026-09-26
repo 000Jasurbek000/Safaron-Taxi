@@ -49,7 +49,7 @@ if [ ! -f ".env" ]; then
 else
   ok ".env saqlanadi"
 fi
-mkdir -p data uploads/drivers uploads/vehicles uploads/docs tmp
+mkdir -p data uploads/drivers uploads/vehicles uploads/docs
 ok "data/ va uploads/ saqlanadi (o‘chirilmaydi)"
 
 begin "Git pull (faqat kod, production fayllarsiz)"
@@ -78,13 +78,6 @@ begin "Backend import testi (app.main:app)"
 python -c "from app.main import app; print(app.title)" || fail "app import qilinmadi"
 ok "FastAPI application yuklandi"
 
-begin "Passenger restart"
-touch tmp/restart.txt || fail "tmp/restart.txt yozilmadi"
-ok "tmp/restart.txt yangilandi"
-if command -v passenger-config >/dev/null 2>&1; then
-  passenger-config restart-app "${BACKEND_DIR}" >/dev/null 2>&1 && ok "passenger-config restart-app" || true
-fi
-
 echo
 echo "========================================"
 echo " SUCCESS"
@@ -94,4 +87,3 @@ echo " Admin:   ${DOMAIN}/admin/"
 echo " Docs:    ${DOMAIN}/docs"
 echo " Health:  ${DOMAIN}/health"
 echo "========================================"
-echo "Brauzerda Ctrl+F5 qiling (logo kesh)."

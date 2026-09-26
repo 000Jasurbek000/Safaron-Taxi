@@ -27,6 +27,5 @@ releases/
 *.sqlite
 *.sqlite3
 
-# Logs and Passenger restart stamp
+# Logs
 *.log
-tmp/restart.txt
