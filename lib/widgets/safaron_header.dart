@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../theme/app_colors.dart';
 import '../../widgets/app_ui.dart';
-import 'safaron_logo.dart';
 
 class SafaronHeader extends StatelessWidget {
   const SafaronHeader({
@@ -26,36 +24,8 @@ class SafaronHeader extends StatelessWidget {
       child: Row(
         children: [
           AppBackButton(onTap: onBack),
-          const SafaronLogo(size: 40, borderRadius: 10),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'SAFARON TAXI',
-                  style: GoogleFonts.montserrat(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                    color: AppColors.primaryDark,
-                    letterSpacing: 0.4,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: GoogleFonts.montserrat(
-                    fontSize: 10,
-                    color: AppColors.textMuted,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (trailing != null)
-            trailing!
-          else
-            const SizedBox(width: 40),
+          const Spacer(),
+          if (trailing != null) trailing! else const SizedBox(width: 40),
         ],
       ),
     );

@@ -29,4 +29,3 @@ releases/
 
 # Logs
 *.log
-tmp/restart.txt

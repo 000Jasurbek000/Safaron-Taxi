@@ -1,18 +1,27 @@
-# SAFARON TAXI — API
+# SAFARON TAXI — API (lokal)
 
-Python FastAPI backend + admin panel.
+## Windows
 
-## Ishga tushirish
+```powershell
+cd backend
+.\run_local.ps1
+```
+
+## Linux / macOS
 
 ```bash
+cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
-nano .env
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+cp -n .env.example .env
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-- API: `http://SERVER_IP:8000`
-- Admin: `http://SERVER_IP:8000/admin/`
-- Docs: `http://SERVER_IP:8000/docs`
+- API: http://127.0.0.1:8000
+- Admin: http://127.0.0.1:8000/admin/
+- Docs: http://127.0.0.1:8000/docs
+- Health: http://127.0.0.1:8000/health
+
+Admin: `.env` dagi `SAFARON_ADMIN_PHONE` / `SAFARON_ADMIN_PASSWORD`  
+Dev OTP: `1234`
