@@ -753,6 +753,18 @@ def reject_location(location_id: int, admin: AdminUser = Depends(get_current_adm
     return OkResponse(ok=True)
 
 
+@router.delete("/locations/{location_id}", response_model=OkResponse)
+def delete_location(location_id: int, admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
+    loc = db.get(Location, location_id)
+    if not loc:
+        raise HTTPException(404, "Joy topilmadi.")
+    name = loc.name
+    _log(db, admin, "location_delete", "location", location_id, None, {"name": name})
+    db.delete(loc)
+    db.commit()
+    return OkResponse(ok=True, message="Joy o‘chirildi.")
+
+
 @router.get("/trips")
 def admin_trips(admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
     published = db.query(Trip).order_by(Trip.id.desc()).limit(200).all()

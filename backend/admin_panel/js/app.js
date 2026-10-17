@@ -822,6 +822,7 @@
         { label: 'Holat', key: 'is_approved', render: (r) => u.pill(r.is_approved ? 'APPROVED' : 'PENDING') },
         { label: '', key: 'edit', render: (r) => `<button class="btn sm" data-edit="${r.id}">✎ Tahrirlash</button>` },
         { label: '', key: 'x', render: (r) => `<span data-loc="${r.id}" data-ok="${r.is_approved}"></span>` },
+        { label: '', key: 'del', render: (r) => `<button class="btn sm danger" data-del="${r.id}">🗑 O‘chirish</button>` },
       ], rows)),
     });
     const nameEl = document.getElementById('locName');
@@ -954,6 +955,16 @@
           navigate('locations');
         };
       });
+    });
+    content.querySelectorAll('[data-del]').forEach((b) => {
+      b.onclick = async () => {
+        const id = b.getAttribute('data-del');
+        const row = rows.find((r) => String(r.id) === String(id));
+        if (!confirm(`“${row ? row.name : '#' + id}” joyini butunlay o‘chirasizmi? Bu amalni qaytarib bo‘lmaydi.`)) return;
+        await api()(`/admin/locations/${id}`, { method: 'DELETE' });
+        if (editingId === Number(id)) resetForm();
+        navigate('locations');
+      };
     });
   }
 

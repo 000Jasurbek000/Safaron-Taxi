@@ -42,14 +42,20 @@ class _PlacePickerFieldState extends State<PlacePickerField> {
   void initState() {
     super.initState();
     widget.controller.addListener(_onTextChanged);
+    PlaceRegistryService.instance.addListener(_refreshSuggestions);
     _focus.addListener(() {
-      if (_focus.hasFocus) _refreshSuggestions();
+      if (_focus.hasFocus) {
+        _refreshSuggestions();
+        // Admin joy nomini o'zgartirgan bo'lsa, ro'yxat ochilganda yangilanadi.
+        PlaceRegistryService.instance.refresh();
+      }
     });
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_onTextChanged);
+    PlaceRegistryService.instance.removeListener(_refreshSuggestions);
     _focus.dispose();
     super.dispose();
   }
@@ -61,7 +67,9 @@ class _PlacePickerFieldState extends State<PlacePickerField> {
 
   void _refreshSuggestions() {
     setState(() {
-      _suggestions = PlaceRegistryService.instance.search(widget.controller.text);
+      _suggestions = PlaceRegistryService.instance.search(
+        widget.controller.text,
+      );
     });
   }
 
@@ -92,111 +100,161 @@ class _PlacePickerFieldState extends State<PlacePickerField> {
     widget.controller.clear();
     _suggestions = [];
     widget.onSelectionChanged?.call(
-      const PlaceSelection(displayName: PlaceSelection.otherLabel, isCustom: true),
+      const PlaceSelection(
+        displayName: PlaceSelection.otherLabel,
+        isCustom: true,
+      ),
     );
     setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    final showList = _focus.hasFocus && !_customMode && (_suggestions.isNotEmpty || widget.controller.text.isEmpty);
+    final showList =
+        _focus.hasFocus &&
+        !_customMode &&
+        (_suggestions.isNotEmpty || widget.controller.text.isEmpty);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: 12,
-              height: 12,
-              decoration: BoxDecoration(color: widget.accent, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.label,
-                    style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w500),
-                  ),
-                  TextField(
-                    controller: widget.controller,
-                    focusNode: _focus,
-                    style: GoogleFonts.montserrat(color: AppColors.navy, fontSize: 15, fontWeight: FontWeight.w700),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      hintText: _customMode ? tr('Manzil nomini yozing') : widget.hint,
-                      hintStyle: GoogleFonts.montserrat(
-                        color: AppColors.textMuted.withValues(alpha: 0.85),
-                        fontSize: 13,
+    return TapRegion(
+      onTapOutside: (_) => _focus.unfocus(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: widget.accent,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.label,
+                      style: GoogleFonts.montserrat(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.only(top: 2, bottom: 2),
                     ),
-                    onTap: () {
-                      if (!_customMode) _refreshSuggestions();
-                    },
+                    TextField(
+                      controller: widget.controller,
+                      focusNode: _focus,
+                      style: GoogleFonts.montserrat(
+                        color: AppColors.navy,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        hintText: _customMode
+                            ? tr('Manzil nomini yozing')
+                            : widget.hint,
+                        hintStyle: GoogleFonts.montserrat(
+                          color: AppColors.textMuted.withValues(alpha: 0.85),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.only(
+                          top: 2,
+                          bottom: 2,
+                        ),
+                      ),
+                      onTap: () {
+                        if (!_customMode) _refreshSuggestions();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              if (widget.showMap) ...[
+                const SizedBox(width: 8),
+                _MapBtn(
+                  accent: widget.accent,
+                  active: widget.mapOpen,
+                  onTap: widget.onMapTap,
+                ),
+              ],
+            ],
+          ),
+          if (showList)
+            Container(
+              margin: const EdgeInsets.only(left: 24, top: 6),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.cardBorder),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.navy.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  for (final p in _suggestions)
+                    ListTile(
+                      dense: true,
+                      title: Text(
+                        p.name,
+                        style: GoogleFonts.montserrat(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                      subtitle: p.aliases.isEmpty
+                          ? null
+                          : Text(
+                              p.aliases.take(3).join(', '),
+                              style: GoogleFonts.montserrat(
+                                fontSize: 11,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                      onTap: () => _pick(p),
+                    ),
+                  ListTile(
+                    dense: true,
+                    leading: Icon(
+                      Icons.edit_location_alt_outlined,
+                      color: widget.accent,
+                      size: 20,
+                    ),
+                    title: Text(
+                      PlaceSelection.otherLabel,
+                      style: GoogleFonts.montserrat(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                        color: widget.accent,
+                      ),
+                    ),
+                    onTap: _pickOther,
                   ),
                 ],
               ),
             ),
-            if (widget.showMap) ...[
-              const SizedBox(width: 8),
-              _MapBtn(accent: widget.accent, active: widget.mapOpen, onTap: widget.onMapTap),
-            ],
-          ],
-        ),
-        if (showList)
-          Container(
-            margin: const EdgeInsets.only(left: 24, top: 6),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.cardBorder),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.navy.withValues(alpha: 0.06),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                for (final p in _suggestions)
-                  ListTile(
-                    dense: true,
-                    title: Text(p.name, style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13)),
-                    subtitle: p.aliases.isEmpty
-                        ? null
-                        : Text(
-                            p.aliases.take(3).join(', '),
-                            style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted),
-                          ),
-                    onTap: () => _pick(p),
-                  ),
-                ListTile(
-                  dense: true,
-                  leading: Icon(Icons.edit_location_alt_outlined, color: widget.accent, size: 20),
-                  title: Text(
-                    PlaceSelection.otherLabel,
-                    style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 13, color: widget.accent),
-                  ),
-                  onTap: _pickOther,
-                ),
-              ],
-            ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
 
 class _MapBtn extends StatelessWidget {
-  const _MapBtn({required this.accent, required this.active, required this.onTap});
+  const _MapBtn({
+    required this.accent,
+    required this.active,
+    required this.onTap,
+  });
   final Color accent;
   final bool active;
   final VoidCallback onTap;
