@@ -39,6 +39,7 @@ from app.schemas import (
     NotifyBroadcastIn,
     OkResponse,
     StatusUpdateIn,
+    UserUpdateIn,
 )
 from app.security import create_access_token
 from app.services.admin_auth import (
@@ -491,7 +492,7 @@ def users(
     admin: AdminUser = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    query = db.query(User).options(joinedload(User.driver_profile))
+    query = db.query(User).options(joinedload(User.driver_profile)).filter(User.deleted_at.is_(None))
     if q:
         like = f"%{q}%"
         query = query.filter((User.first_name.ilike(like)) | (User.last_name.ilike(like)) | (User.phone.ilike(like)))
@@ -540,6 +541,44 @@ def block_user(user_id: int, body: StatusUpdateIn, admin: AdminUser = Depends(ge
     _log(db, admin, "user_block" if user.is_blocked else "user_unblock", "user", user.id, before, {"is_blocked": user.is_blocked, "reason": body.reason})
     db.commit()
     return OkResponse(ok=True)
+
+
+@router.post("/users/{user_id}/update", response_model=OkResponse)
+def update_user(user_id: int, body: UserUpdateIn, admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
+    user = db.get(User, user_id)
+    if not user or user.deleted_at is not None:
+        raise HTTPException(404, "Foydalanuvchi topilmadi.")
+    before = {"first_name": user.first_name, "last_name": user.last_name, "phone": user.phone}
+    if body.first_name is not None and body.first_name.strip():
+        user.first_name = body.first_name.strip()
+    if body.last_name is not None and body.last_name.strip():
+        user.last_name = body.last_name.strip()
+    if body.phone is not None and body.phone.strip():
+        new_phone = body.phone.strip()
+        if new_phone != user.phone:
+            exists = db.query(User).filter(User.phone == new_phone, User.id != user.id).first()
+            if exists:
+                raise HTTPException(400, "Bu telefon raqami boshqa foydalanuvchida mavjud.")
+            user.phone = new_phone
+    _log(db, admin, "user_update", "user", user.id, before, {"first_name": user.first_name, "last_name": user.last_name, "phone": user.phone})
+    db.commit()
+    return OkResponse(ok=True, message="Foydalanuvchi ma'lumotlari yangilandi.")
+
+
+@router.delete("/users/{user_id}", response_model=OkResponse)
+def delete_user(user_id: int, admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
+    user = db.get(User, user_id)
+    if not user or user.deleted_at is not None:
+        raise HTTPException(404, "Foydalanuvchi topilmadi.")
+    # Haqiqiy o'chirish o'rniga "soft delete" — bog'liq yozuvlar (safarlar,
+    # xabarlar, reytinglar) buzilib qolmasligi uchun. Foydalanuvchi ro'yxatda
+    # endi ko'rinmaydi va tizimga kira olmaydi.
+    user.deleted_at = datetime.utcnow()
+    user.is_active = False
+    user.is_blocked = True
+    _log(db, admin, "user_delete", "user", user.id, {"deleted_at": None}, {"deleted_at": str(user.deleted_at)})
+    db.commit()
+    return OkResponse(ok=True, message="Foydalanuvchi o'chirildi.")
 
 
 @router.get("/drivers")

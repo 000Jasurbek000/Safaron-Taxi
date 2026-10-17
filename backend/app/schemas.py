@@ -315,6 +315,12 @@ class StatusUpdateIn(BaseModel):
     reason: Optional[str] = None
 
 
+class UserUpdateIn(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone: Optional[str] = None
+
+
 class ClientErrorIn(BaseModel):
     message: str
     detail: Optional[str] = None

@@ -479,13 +479,36 @@
         <tbody>${(u.trips || []).map((t) => `<tr><td>${t.id}</td><td>${esc(t.from_text)} → ${esc(t.to_text)}</td><td>${money(t.price)}</td><td>${t.seats_available}/${t.seats_total}</td><td>${badge(t.status)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Yo‘q</td></tr>'}</tbody></table></div>
       `,
       actionsHtml: `
+        <button class="btn" id="actEditUser">✎ Tahrirlash</button>
         <button class="btn ${u.is_blocked ? '' : 'danger'}" id="actBlock">${u.is_blocked ? '✅ Faollashtirish' : '⛔ Bloklash'}</button>
         ${u.driver_id ? `<button class="btn blue" id="actOpenDriver">🚕 Haydovchi profili</button>` : ''}
+        <button class="btn danger" id="actDeleteUser">🗑 O‘chirish</button>
       `,
     });
     modalRoot.querySelector('#actBlock').onclick = async () => {
       const reason = u.is_blocked ? 'unblock' : (prompt('Bloklash sababi:') || 'Admin');
       await api()(`/admin/users/${id}/block`, { method: 'POST', body: JSON.stringify({ status: u.is_blocked ? 'UNBLOCK' : 'BLOCK', reason }) });
+      closeModal();
+      navigate('users');
+    };
+    modalRoot.querySelector('#actEditUser').onclick = async () => {
+      const firstName = prompt('Ism:', u.first_name || '');
+      if (firstName === null) return;
+      const lastName = prompt('Familiya:', u.last_name || '');
+      if (lastName === null) return;
+      const phone = prompt('Telefon:', u.phone || '');
+      if (phone === null) return;
+      await api()(`/admin/users/${id}/update`, {
+        method: 'POST',
+        body: JSON.stringify({ first_name: firstName, last_name: lastName, phone }),
+      });
+      closeModal();
+      navigate('users');
+    };
+    modalRoot.querySelector('#actDeleteUser').onclick = async () => {
+      if (!confirm(`${u.full_name} (#${u.id}) ni butunlay o‘chirasizmi? Bu amalni qaytarib bo‘lmaydi — foydalanuvchi tizimga kira olmaydi.`)) return;
+      if (!confirm('Haqiqatan ham ishonchingiz komilmi?')) return;
+      await api()(`/admin/users/${id}`, { method: 'DELETE' });
       closeModal();
       navigate('users');
     };
@@ -575,7 +598,7 @@
           { label: 'Foydalanuvchi', key: 'full_name', render: (r) => u.userCell(r.full_name, r.phone, r.avatar_url) },
           { label: 'Telefon', key: 'phone' },
           { label: 'Rol', key: 'role_label', render: (r) => r.has_driver
-            ? u.pill('DRIVER', ['Yo‘lovchi / Haydovchi', 'blue'])
+            ? u.pill('DRIVER', ['Yo‘lovchi / Haydovchi', 'violet'])
             : u.pill('ACTIVE', ['Yo‘lovchi', 'ok']) },
           { label: 'Referal kod', key: 'referral_code', render: (r) => r.referral_code ? `<code>${u.esc(r.referral_code)}</code>` : '—' },
           { label: 'Ro‘yxat', key: 'created_at', render: (r) => u.dt(r.created_at) },
