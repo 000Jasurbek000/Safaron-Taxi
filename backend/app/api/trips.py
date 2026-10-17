@@ -29,10 +29,12 @@ def list_ready_trips(
     q = (
         db.query(Trip)
         .join(DriverProfile, DriverProfile.id == Trip.driver_id)
+        .join(User, User.id == DriverProfile.user_id)
         .filter(
             Trip.status.in_(["OPEN", "FULL"]),
             Trip.seats_available > 0,
             DriverProfile.status == "APPROVED",
+            User.deleted_at.is_(None),
         )
     )
     if from_q:

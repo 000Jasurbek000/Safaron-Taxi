@@ -66,7 +66,8 @@ def create_request(body: RequestCreateIn, user: User = Depends(get_current_user)
 
     online_drivers = (
         db.query(DriverProfile)
-        .filter(DriverProfile.status == "APPROVED", DriverProfile.is_online.is_(True))
+        .join(User, User.id == DriverProfile.user_id)
+        .filter(DriverProfile.status == "APPROVED", DriverProfile.is_online.is_(True), User.deleted_at.is_(None))
         .all()
     )
     # Stale online cleanup

@@ -659,6 +659,18 @@ def delete_user(user_id: int, admin: AdminUser = Depends(get_current_admin), db:
     user.deleted_at = datetime.utcnow()
     user.is_active = False
     user.is_blocked = True
+    driver = db.query(DriverProfile).filter(DriverProfile.user_id == user.id).first()
+    if driver:
+        # Haydovchi profili ham faolsizlantiriladi — aks holda ilovada
+        # (onlayn haydovchilar ro'yxati, e'lon qilingan safarlar) ko'rinishda
+        # qolib ketadi, garchi hisob o'chirilgan bo'lsa ham.
+        driver.is_online = False
+        if driver.status == "APPROVED":
+            driver.status = "SUSPENDED"
+            driver.suspend_reason = "Foydalanuvchi hisobi o'chirildi."
+        db.query(Trip).filter(Trip.driver_id == driver.id, Trip.status.in_(["OPEN", "FULL"])).update(
+            {"status": "CANCELLED"}, synchronize_session=False
+        )
     _log(db, admin, "user_delete", "user", user.id, {"deleted_at": None}, {"deleted_at": str(user.deleted_at)})
     db.commit()
     return OkResponse(ok=True, message="Foydalanuvchi o'chirildi.")
