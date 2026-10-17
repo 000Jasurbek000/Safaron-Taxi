@@ -20,10 +20,13 @@ from app.models import (
     FraudEvent,
     Location,
     LocationAlias,
+    Message,
     Notification,
+    Rating,
     Referral,
     SystemSetting,
     Trip,
+    TripBooking,
     TripRequest,
     User,
     Vehicle,
@@ -38,7 +41,9 @@ from app.schemas import (
     LocationCreateIn,
     NotifyBroadcastIn,
     OkResponse,
+    RequestUpdateIn,
     StatusUpdateIn,
+    TripUpdateIn,
     UserUpdateIn,
 )
 from app.security import create_access_token
@@ -438,10 +443,48 @@ def request_detail(request_id: int, admin: AdminUser = Depends(get_current_admin
     }
 
 
+@router.post("/requests/{request_id}/update", response_model=OkResponse)
+def update_request(request_id: int, body: RequestUpdateIn, admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
+    r = db.get(TripRequest, request_id)
+    if not r:
+        raise HTTPException(404, "So‘rov topilmadi.")
+    before = {"from_text": r.from_text, "to_text": r.to_text, "offered_price": r.offered_price}
+    if body.from_text is not None:
+        r.from_text = body.from_text.strip()
+    if body.to_text is not None:
+        r.to_text = body.to_text.strip()
+    if body.exact_place is not None:
+        r.exact_place = body.exact_place
+    if body.scheduled_at is not None:
+        r.scheduled_at = body.scheduled_at
+    if body.offered_price is not None:
+        r.offered_price = body.offered_price
+    if body.passengers_count is not None:
+        r.passengers_count = body.passengers_count
+    if body.has_luggage is not None:
+        r.has_luggage = body.has_luggage
+    if body.note is not None:
+        r.note = body.note
+    _log(db, admin, "request_update", "request", r.id, before, {"from_text": r.from_text, "to_text": r.to_text, "offered_price": r.offered_price})
+    db.commit()
+    return OkResponse(ok=True, message="So‘rov yangilandi.")
+
+
+@router.delete("/requests/{request_id}", response_model=OkResponse)
+def delete_request(request_id: int, admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
+    r = db.get(TripRequest, request_id)
+    if not r:
+        raise HTTPException(404, "So‘rov topilmadi.")
+    db.query(Message).filter(Message.request_id == request_id).delete()
+    db.query(Rating).filter(Rating.request_id == request_id).delete()
+    _log(db, admin, "request_delete", "request", request_id, None, {"from_text": r.from_text, "to_text": r.to_text})
+    db.delete(r)
+    db.commit()
+    return OkResponse(ok=True, message="So‘rov o‘chirildi.")
+
+
 @router.get("/trips/{trip_id}")
 def trip_detail(trip_id: int, admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
-    from app.models import TripBooking
-
     t = db.get(Trip, trip_id)
     if not t:
         raise HTTPException(404, "Safar topilmadi.")
@@ -483,6 +526,43 @@ def trip_detail(trip_id: int, admin: AdminUser = Depends(get_current_admin), db:
         "created_at": t.created_at,
         "bookings": booking_rows,
     }
+
+
+@router.post("/trips/{trip_id}/update", response_model=OkResponse)
+def update_trip(trip_id: int, body: TripUpdateIn, admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
+    t = db.get(Trip, trip_id)
+    if not t:
+        raise HTTPException(404, "Safar topilmadi.")
+    before = {"from_text": t.from_text, "to_text": t.to_text, "price": t.price, "scheduled_at": str(t.scheduled_at)}
+    if body.from_text is not None:
+        t.from_text = body.from_text.strip()
+    if body.to_text is not None:
+        t.to_text = body.to_text.strip()
+    if body.scheduled_at is not None:
+        t.scheduled_at = body.scheduled_at
+    if body.seats_total is not None:
+        t.seats_total = body.seats_total
+    if body.price is not None:
+        t.price = body.price
+    if body.note is not None:
+        t.note = body.note
+    _log(db, admin, "trip_update", "trip", t.id, before, {"from_text": t.from_text, "to_text": t.to_text, "price": t.price})
+    db.commit()
+    return OkResponse(ok=True, message="Safar yangilandi.")
+
+
+@router.delete("/trips/{trip_id}", response_model=OkResponse)
+def delete_trip(trip_id: int, admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
+    t = db.get(Trip, trip_id)
+    if not t:
+        raise HTTPException(404, "Safar topilmadi.")
+    db.query(Message).filter(Message.trip_id == trip_id).delete()
+    db.query(Rating).filter(Rating.trip_id == trip_id).delete()
+    db.query(TripBooking).filter(TripBooking.trip_id == trip_id).delete()
+    _log(db, admin, "trip_delete", "trip", trip_id, None, {"from_text": t.from_text, "to_text": t.to_text})
+    db.delete(t)
+    db.commit()
+    return OkResponse(ok=True, message="Safar o‘chirildi.")
 
 
 @router.get("/users")

@@ -23,6 +23,14 @@
     if (!v) return '—';
     try { return new Date(v).toLocaleString('uz-UZ'); } catch { return String(v); }
   }
+  function dtLocalValue(v) {
+    if (!v) return '';
+    try {
+      const d = new Date(v);
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    } catch { return ''; }
+  }
   function badge(status) {
     const s = (status || '—').toUpperCase();
     let cls = 'badge';
@@ -553,15 +561,15 @@
       sub: `${badge(r.status)} · ${esc(r.passenger_name)} · ${esc(r.passenger_phone)}`,
       bodyHtml: `
         <div class="kv">
-          <div class="item"><div class="k">Qayerdan</div><div class="v">${esc(r.from_text)}</div></div>
-          <div class="item"><div class="k">Qayerga</div><div class="v">${esc(r.to_text)}</div></div>
-          <div class="item"><div class="k">Aniq joy</div><div class="v">${esc(r.exact_place || '—')}</div></div>
-          <div class="item"><div class="k">Sana/vaqt</div><div class="v">${dt(r.scheduled_at)}</div></div>
-          <div class="item"><div class="k">Yo‘lovchilar</div><div class="v">${r.passengers_count}</div></div>
-          <div class="item"><div class="k">Bagaj</div><div class="v">${r.has_luggage ? 'Bor' : 'Yo‘q'}</div></div>
-          <div class="item"><div class="k">Taklif narx</div><div class="v">${money(r.offered_price)}</div></div>
+          <div class="item"><div class="k">Qayerdan</div><div class="v" id="kvReqFrom">${esc(r.from_text)}</div></div>
+          <div class="item"><div class="k">Qayerga</div><div class="v" id="kvReqTo">${esc(r.to_text)}</div></div>
+          <div class="item"><div class="k">Aniq joy</div><div class="v" id="kvReqExact">${esc(r.exact_place || '—')}</div></div>
+          <div class="item"><div class="k">Sana/vaqt</div><div class="v" id="kvReqWhen">${dt(r.scheduled_at)}</div></div>
+          <div class="item"><div class="k">Yo‘lovchilar</div><div class="v" id="kvReqCount">${r.passengers_count}</div></div>
+          <div class="item"><div class="k">Bagaj</div><div class="v" id="kvReqLuggage">${r.has_luggage ? 'Bor' : 'Yo‘q'}</div></div>
+          <div class="item"><div class="k">Taklif narx</div><div class="v" id="kvReqPrice">${money(r.offered_price)}</div></div>
           <div class="item"><div class="k">Kelishilgan</div><div class="v">${r.agreed_price != null ? money(r.agreed_price) : '—'}</div></div>
-          <div class="item"><div class="k">Izoh</div><div class="v">${esc(r.note || '—')}</div></div>
+          <div class="item"><div class="k">Izoh</div><div class="v" id="kvReqNote">${esc(r.note || '—')}</div></div>
           <div class="item"><div class="k">Bekor</div><div class="v">${esc(r.cancelled_by || '—')} ${esc(r.cancel_reason || '')}</div></div>
         </div>
         <div class="section-title">Haydovchi javoblari</div>
@@ -574,7 +582,48 @@
           <td>${badge(x.status)}</td>
         </tr>`).join('') || '<tr><td colspan="5" class="muted">Javob yo‘q</td></tr>'}</tbody></table></div>
       `,
+      actionsHtml: `
+        <button class="btn" id="actEditReq">✎ Tahrirlash</button>
+        <button class="btn danger" id="actDeleteReq">🗑 O‘chirish</button>
+      `,
     });
+    modalRoot.querySelector('#actEditReq').onclick = () => {
+      const actions = modalRoot.querySelector('.modal-actions');
+      modalRoot.querySelector('#kvReqFrom').innerHTML = `<input type="text" id="editReqFrom" value="${esc(r.from_text || '')}" />`;
+      modalRoot.querySelector('#kvReqTo').innerHTML = `<input type="text" id="editReqTo" value="${esc(r.to_text || '')}" />`;
+      modalRoot.querySelector('#kvReqExact').innerHTML = `<input type="text" id="editReqExact" value="${esc(r.exact_place || '')}" />`;
+      modalRoot.querySelector('#kvReqWhen').innerHTML = `<input type="datetime-local" id="editReqWhen" value="${dtLocalValue(r.scheduled_at)}" />`;
+      modalRoot.querySelector('#kvReqCount').innerHTML = `<input type="number" min="1" max="15" id="editReqCount" value="${r.passengers_count}" />`;
+      modalRoot.querySelector('#kvReqPrice').innerHTML = `<input type="number" min="0" id="editReqPrice" value="${r.offered_price}" />`;
+      modalRoot.querySelector('#kvReqNote').innerHTML = `<input type="text" id="editReqNote" value="${esc(r.note || '')}" />`;
+      actions.innerHTML = `
+        <button class="btn primary" id="actSaveReq">💾 Saqlash</button>
+        <button class="btn" id="actCancelReq">✕ Bekor qilish</button>
+      `;
+      actions.querySelector('#actCancelReq').onclick = () => openRequestDetail(id);
+      actions.querySelector('#actSaveReq').onclick = async () => {
+        await api()(`/admin/requests/${id}/update`, {
+          method: 'POST',
+          body: JSON.stringify({
+            from_text: modalRoot.querySelector('#editReqFrom').value.trim(),
+            to_text: modalRoot.querySelector('#editReqTo').value.trim(),
+            exact_place: modalRoot.querySelector('#editReqExact').value.trim(),
+            scheduled_at: new Date(modalRoot.querySelector('#editReqWhen').value).toISOString(),
+            passengers_count: Number(modalRoot.querySelector('#editReqCount').value),
+            offered_price: Number(modalRoot.querySelector('#editReqPrice').value),
+            note: modalRoot.querySelector('#editReqNote').value.trim(),
+          }),
+        });
+        closeModal();
+        navigate('trips');
+      };
+    };
+    modalRoot.querySelector('#actDeleteReq').onclick = async () => {
+      if (!confirm(`So‘rov #${r.id} ni butunlay o‘chirasizmi? Bu amalni qaytarib bo‘lmaydi.`)) return;
+      await api()(`/admin/requests/${id}`, { method: 'DELETE' });
+      closeModal();
+      navigate('trips');
+    };
   }
 
   async function openTripDetail(id) {
@@ -584,13 +633,14 @@
       sub: `${badge(t.status)} · ${esc(t.driver_name)} · ${esc(t.plate)}`,
       bodyHtml: `
         <div class="kv">
-          <div class="item"><div class="k">Yo‘nalish</div><div class="v">${esc(t.from_text)} → ${esc(t.to_text)}</div></div>
-          <div class="item"><div class="k">Vaqt</div><div class="v">${dt(t.scheduled_at)}</div></div>
-          <div class="item"><div class="k">Joylar</div><div class="v">${t.seats_available}/${t.seats_total}</div></div>
-          <div class="item"><div class="k">Narx</div><div class="v">${money(t.price)}</div></div>
+          <div class="item"><div class="k">Qayerdan</div><div class="v" id="kvTripFrom">${esc(t.from_text)}</div></div>
+          <div class="item"><div class="k">Qayerga</div><div class="v" id="kvTripTo">${esc(t.to_text)}</div></div>
+          <div class="item"><div class="k">Vaqt</div><div class="v" id="kvTripWhen">${dt(t.scheduled_at)}</div></div>
+          <div class="item"><div class="k">Joylar</div><div class="v" id="kvTripSeats">${t.seats_available}/${t.seats_total}</div></div>
+          <div class="item"><div class="k">Narx</div><div class="v" id="kvTripPrice">${money(t.price)}</div></div>
           <div class="item"><div class="k">Haydovchi</div><div class="v">${esc(t.driver_name)} · ${esc(t.driver_phone)}</div></div>
           <div class="item"><div class="k">Mashina</div><div class="v">${esc(t.car)} · ${esc(t.plate)}</div></div>
-          <div class="item"><div class="k">Izoh</div><div class="v">${esc(t.note || '—')}</div></div>
+          <div class="item"><div class="k">Izoh</div><div class="v" id="kvTripNote">${esc(t.note || '—')}</div></div>
         </div>
         <div class="section-title">Bandlar</div>
         <div class="table-wrap"><table><thead><tr><th>Yo‘lovchi</th><th>Telefon</th><th>Joy</th><th>Status</th></tr></thead>
@@ -598,7 +648,46 @@
           <td>${esc(b.passenger_name)}</td><td>${esc(b.passenger_phone)}</td><td>${b.seats}</td><td>${badge(b.status)}</td>
         </tr>`).join('') || '<tr><td colspan="4" class="muted">Band yo‘q</td></tr>'}</tbody></table></div>
       `,
+      actionsHtml: `
+        <button class="btn" id="actEditTrip">✎ Tahrirlash</button>
+        <button class="btn danger" id="actDeleteTrip">🗑 O‘chirish</button>
+      `,
     });
+    modalRoot.querySelector('#actEditTrip').onclick = () => {
+      const actions = modalRoot.querySelector('.modal-actions');
+      modalRoot.querySelector('#kvTripFrom').innerHTML = `<input type="text" id="editTripFrom" value="${esc(t.from_text || '')}" />`;
+      modalRoot.querySelector('#kvTripTo').innerHTML = `<input type="text" id="editTripTo" value="${esc(t.to_text || '')}" />`;
+      modalRoot.querySelector('#kvTripWhen').innerHTML = `<input type="datetime-local" id="editTripWhen" value="${dtLocalValue(t.scheduled_at)}" />`;
+      modalRoot.querySelector('#kvTripSeats').innerHTML = `<input type="number" min="1" max="15" id="editTripSeats" value="${t.seats_total}" />`;
+      modalRoot.querySelector('#kvTripPrice').innerHTML = `<input type="number" min="0" id="editTripPrice" value="${t.price}" />`;
+      modalRoot.querySelector('#kvTripNote').innerHTML = `<input type="text" id="editTripNote" value="${esc(t.note || '')}" />`;
+      actions.innerHTML = `
+        <button class="btn primary" id="actSaveTrip">💾 Saqlash</button>
+        <button class="btn" id="actCancelTrip">✕ Bekor qilish</button>
+      `;
+      actions.querySelector('#actCancelTrip').onclick = () => openTripDetail(id);
+      actions.querySelector('#actSaveTrip').onclick = async () => {
+        await api()(`/admin/trips/${id}/update`, {
+          method: 'POST',
+          body: JSON.stringify({
+            from_text: modalRoot.querySelector('#editTripFrom').value.trim(),
+            to_text: modalRoot.querySelector('#editTripTo').value.trim(),
+            scheduled_at: new Date(modalRoot.querySelector('#editTripWhen').value).toISOString(),
+            seats_total: Number(modalRoot.querySelector('#editTripSeats').value),
+            price: Number(modalRoot.querySelector('#editTripPrice').value),
+            note: modalRoot.querySelector('#editTripNote').value.trim(),
+          }),
+        });
+        closeModal();
+        navigate('trips');
+      };
+    };
+    modalRoot.querySelector('#actDeleteTrip').onclick = async () => {
+      if (!confirm(`Safar #${t.id} ni butunlay o‘chirasizmi? Bu amalni qaytarib bo‘lmaydi.`)) return;
+      await api()(`/admin/trips/${id}`, { method: 'DELETE' });
+      closeModal();
+      navigate('trips');
+    };
   }
 
   async function renderUsers() {
@@ -750,7 +839,7 @@
         { label: 'Vaqt', key: 'scheduled_at', render: (r) => u.dt(r.scheduled_at) },
         { label: 'Narx', key: 'price', render: (r) => u.money(r.price) },
         { label: 'Holat', key: 'status', render: (r) => u.pill(r.status) },
-        { label: '', key: 'x', render: (r) => `<button class="btn sm primary" data-kind="${r.kind || 'trip'}" data-id="${r.id}">Batafsil</button>` },
+        { label: '', key: 'x', render: (r) => `<button class="btn sm primary" data-kind="${r.kind || 'trip'}" data-id="${r.id}">Batafsil</button> <button class="btn sm danger" data-kind="${r.kind || 'trip'}" data-del-trip="${r.id}">🗑</button>` },
       ], rows)),
       side: u.card('Faol safarlar', active.length ? active.slice(0, 8).map((t) =>
         `<div style="padding:8px 0;border-bottom:1px solid var(--border)"><b>#${t.id}</b> ${u.esc(t.from_text)} → ${u.esc(t.to_text)}<br>${u.pill(t.status)}</div>`
@@ -760,6 +849,15 @@
       b.onclick = () => {
         if (b.dataset.kind === 'request') openRequestDetail(b.dataset.id);
         else openTripDetail(b.dataset.id);
+      };
+    });
+    content.querySelectorAll('[data-del-trip]').forEach((b) => {
+      b.onclick = async () => {
+        const id = b.getAttribute('data-del-trip');
+        const isRequest = b.dataset.kind === 'request';
+        if (!confirm(`#${id} ${isRequest ? 'so‘rovini' : 'safarini'} butunlay o‘chirasizmi? Bu amalni qaytarib bo‘lmaydi.`)) return;
+        await api()(isRequest ? `/admin/requests/${id}` : `/admin/trips/${id}`, { method: 'DELETE' });
+        navigate('trips');
       };
     });
     bindExports(content);

@@ -21,7 +21,7 @@ def send_otp(body: SendOtpIn, db: Session = Depends(get_db)):
     phone = normalize_phone(body.phone)
     if not phone:
         raise HTTPException(400, "Telefon raqami noto‘g‘ri.")
-    user_exists = db.query(User).filter(User.phone == phone).first() is not None
+    user_exists = db.query(User).filter(User.phone == phone, User.deleted_at.is_(None)).first() is not None
     settings = get_settings()
     code = settings.otp_dev_code
     db.query(OtpCode).filter(OtpCode.phone == phone, OtpCode.used.is_(False)).update({"used": True})
@@ -60,6 +60,12 @@ def verify_otp(body: VerifyOtpIn, db: Session = Depends(get_db)):
         user = User(phone=phone, first_name=first, last_name=last)
         db.add(user)
         db.flush()
+    elif user.deleted_at is not None:
+        # O'chirilgan hisob bilan qayta kirish — qayta faollashtiramiz,
+        # aks holda admin panelda "ko'rinmas" foydalanuvchi bo'lib qoladi.
+        user.deleted_at = None
+        user.is_active = True
+        user.is_blocked = False
     user.last_seen_at = datetime.utcnow()
     db.commit()
     db.refresh(user)
@@ -88,6 +94,12 @@ def sign_in(body: SignInIn, db: Session = Depends(get_db)):
         attach_referral(db, user, body.referral_code)
     else:
         # Bir xil telefon = bitta akkaunt. FIO qanday bo‘lishidan qat’i nazar.
+        if user.deleted_at is not None:
+            # O'chirilgan hisob bilan qayta kirish — qayta faollashtiramiz,
+            # aks holda admin panelda "ko'rinmas" foydalanuvchi bo'lib qoladi.
+            user.deleted_at = None
+            user.is_active = True
+            user.is_blocked = False
         if (body.referral_code or "").strip():
             attach_referral(db, user, body.referral_code)
     user.last_seen_at = datetime.utcnow()

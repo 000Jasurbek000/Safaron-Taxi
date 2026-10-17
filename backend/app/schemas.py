@@ -321,6 +321,26 @@ class UserUpdateIn(BaseModel):
     phone: Optional[str] = None
 
 
+class TripUpdateIn(BaseModel):
+    from_text: Optional[str] = None
+    to_text: Optional[str] = None
+    scheduled_at: Optional[datetime] = None
+    seats_total: Optional[int] = Field(default=None, ge=1, le=15)
+    price: Optional[int] = Field(default=None, ge=0)
+    note: Optional[str] = None
+
+
+class RequestUpdateIn(BaseModel):
+    from_text: Optional[str] = None
+    to_text: Optional[str] = None
+    exact_place: Optional[str] = None
+    scheduled_at: Optional[datetime] = None
+    offered_price: Optional[int] = Field(default=None, ge=0)
+    passengers_count: Optional[int] = Field(default=None, ge=1, le=15)
+    has_luggage: Optional[bool] = None
+    note: Optional[str] = None
+
+
 class ClientErrorIn(BaseModel):
     message: str
     detail: Optional[str] = None
