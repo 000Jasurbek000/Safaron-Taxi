@@ -70,7 +70,13 @@ async def apply_driver(
     if seats < 1 or seats > 10:
         raise HTTPException(400, "Yo‘lovchi sig‘imi noto‘g‘ri (1–10).")
 
-    existing_plate = db.query(Vehicle).filter(Vehicle.plate == plate_n).first()
+    existing_plate = (
+        db.query(Vehicle)
+        .join(DriverProfile, DriverProfile.id == Vehicle.driver_id)
+        .join(User, User.id == DriverProfile.user_id)
+        .filter(Vehicle.plate == plate_n, User.deleted_at.is_(None))
+        .first()
+    )
     driver = db.query(DriverProfile).filter(DriverProfile.user_id == user.id).first()
     if existing_plate and (not driver or existing_plate.driver_id != driver.id):
         raise HTTPException(400, "Bu davlat raqami allaqachon ro‘yxatdan o‘tgan.")

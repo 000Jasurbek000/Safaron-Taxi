@@ -1,4 +1,3 @@
-import 'dart:io';
 import '../../l10n/phrase.dart';
 
 import 'package:flutter/material.dart';
@@ -22,6 +21,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/safaron_header.dart';
 import '../../widgets/app_ui.dart';
 import '../../widgets/safaron_logo.dart';
+import '../../widgets/smart_photo.dart';
 import '../booking/register_screen.dart';
 import 'driver/become_driver_intro_screen.dart';
 import 'driver/my_car_screen.dart';
@@ -91,7 +91,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _pickAvatar() async {
     final picker = ImagePicker();
-    final file = await picker.pickImage(source: ImageSource.gallery, maxWidth: 800, imageQuality: 85);
+    final file = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+      imageQuality: 85,
+    );
     if (file == null) return;
     await _profile.setAvatarPath(file.path);
   }
@@ -101,7 +105,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        title: Text(AppStrings.t('logout_title'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, color: AppColors.navy)),
+        title: Text(
+          AppStrings.t('logout_title'),
+          style: GoogleFonts.montserrat(
+            fontWeight: FontWeight.w800,
+            color: AppColors.navy,
+          ),
+        ),
         content: Text(
           AppStrings.t('logout_confirm'),
           style: GoogleFonts.montserrat(color: AppColors.textMuted),
@@ -109,11 +119,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(AppStrings.t('cancel'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
+            child: Text(
+              AppStrings.t('cancel'),
+              style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(AppStrings.t('menu_logout'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, color: AppColors.destination)),
+            child: Text(
+              AppStrings.t('menu_logout'),
+              style: GoogleFonts.montserrat(
+                fontWeight: FontWeight.w800,
+                color: AppColors.destination,
+              ),
+            ),
           ),
         ],
       ),
@@ -122,14 +141,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await _profile.logout();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(AppStrings.t('logged_out')), behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: Text(AppStrings.t('logged_out')),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final registered = AuthService.instance.registered;
-    final driver = registered && _profile.isApprovedDriver && _profile.isDriverRole;
+    final driver =
+        registered && _profile.isApprovedDriver && _profile.isDriverRole;
 
     return ColoredBox(
       color: AppColors.white,
@@ -138,355 +161,456 @@ class _ProfileScreenState extends State<ProfileScreen> {
           color: AppColors.primary,
           onRefresh: AppRefresh.run,
           child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          children: [
-            Text(
-              AppStrings.t('profile'),
-              textAlign: TextAlign.center,
-              style: GoogleFonts.montserrat(
-                fontWeight: FontWeight.w800,
-                fontSize: 18,
-                color: AppColors.navy,
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (!registered) ...[
-              SoftCard(
-                color: AppColors.mintSoft,
-                child: Column(
-                  children: [
-                    CircleAvatar(
-                      radius: 44,
-                      backgroundColor: AppColors.card,
-                      child: Icon(Icons.person_rounded, size: 48, color: AppColors.primary),
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      AppStrings.t('register_first'),
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.montserrat(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 18,
-                        color: AppColors.navy,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      AppStrings.t('register_hint'),
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 13, height: 1.35),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          await Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const RegisterScreen()),
-                          );
-                          if (mounted) setState(() {});
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: AppColors.onPrimary,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                        ),
-                        child: Text(
-                          AppStrings.t('register_btn'),
-                          style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 15),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ] else ...[
-              Center(
-                child: GestureDetector(
-                  onTap: _pickAvatar,
-                  child: Stack(
-                    children: [
-                      CircleAvatar(
-                        radius: 48,
-                        backgroundColor: AppColors.mintSoft,
-                        backgroundImage: _profile.avatarPath.isNotEmpty
-                            ? FileImage(File(_profile.avatarPath))
-                            : null,
-                        child: _profile.avatarPath.isEmpty
-                            ? Icon(Icons.person_rounded, size: 52, color: AppColors.primary)
-                            : null,
-                      ),
-                      Positioned(
-                        right: 0,
-                        bottom: 0,
-                        child: Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: AppColors.white, width: 2),
-                          ),
-                          child: const Icon(Icons.camera_alt_rounded, size: 16, color: AppColors.onPrimary),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            children: [
               Text(
-                _profile.fullName.isEmpty ? AppStrings.t('user_default') : _profile.fullName,
+                AppStrings.t('profile'),
                 textAlign: TextAlign.center,
                 style: GoogleFonts.montserrat(
                   fontWeight: FontWeight.w800,
-                  fontSize: 20,
+                  fontSize: 18,
                   color: AppColors.navy,
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                _profile.phone,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.montserrat(
-                  color: AppColors.textMuted,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 14),
-              if (driver) ...[
-                Center(
-                  child: Material(
-                    color: AppColors.mintSoft,
-                    borderRadius: BorderRadius.circular(24),
-                    child: InkWell(
-                      onTap: _openRole,
-                      borderRadius: BorderRadius.circular(24),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.local_taxi_rounded, size: 16, color: AppColors.primary),
-                            const SizedBox(width: 6),
-                            Text(
-                              AppStrings.t('driver'),
-                              style: GoogleFonts.montserrat(
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primaryDark,
-                                fontSize: 13,
-                              ),
-                            ),
-                            Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.primary),
-                          ],
+              const SizedBox(height: 16),
+              if (!registered) ...[
+                SoftCard(
+                  color: AppColors.mintSoft,
+                  child: Column(
+                    children: [
+                      CircleAvatar(
+                        radius: 44,
+                        backgroundColor: AppColors.card,
+                        child: Icon(
+                          Icons.person_rounded,
+                          size: 48,
+                          color: AppColors.primary,
                         ),
                       ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                SoftCard(
-                  child: Row(
-                    children: [
-                      _Stat(value: (AuthService.instance.user?.ratingAvg ?? 5.0).toStringAsFixed(1), label: AppStrings.t('rating')),
-                      _Stat(value: '${TripCompletionService.instance.driverCompletedCount}', label: AppStrings.t('trip')),
-                      _Stat(value: '${_profile.experienceYears} ${AppStrings.t('years_suffix')}', label: AppStrings.t('experience')),
+                      const SizedBox(height: 14),
+                      Text(
+                        AppStrings.t('register_first'),
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.montserrat(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18,
+                          color: AppColors.navy,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        AppStrings.t('register_hint'),
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.montserrat(
+                          color: AppColors.textMuted,
+                          fontSize: 13,
+                          height: 1.35,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const RegisterScreen(),
+                              ),
+                            );
+                            if (mounted) setState(() {});
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: AppColors.onPrimary,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                          ),
+                          child: Text(
+                            AppStrings.t('register_btn'),
+                            style: GoogleFonts.montserrat(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ] else ...[
                 Center(
-                  child: Material(
-                    color: AppColors.mintSoft,
-                    borderRadius: BorderRadius.circular(24),
-                    child: InkWell(
-                      onTap: _openRole,
-                      borderRadius: BorderRadius.circular(24),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.person_outline_rounded, size: 16, color: AppColors.primary),
-                            const SizedBox(width: 6),
-                            Text(
-                              AppStrings.t('passenger'),
-                              style: GoogleFonts.montserrat(
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primaryDark,
-                                fontSize: 13,
+                  child: GestureDetector(
+                    onTap: _pickAvatar,
+                    child: Stack(
+                      children: [
+                        Container(
+                          width: 96,
+                          height: 96,
+                          decoration: BoxDecoration(
+                            color: AppColors.mintSoft,
+                            shape: BoxShape.circle,
+                          ),
+                          child: _profile.avatarPath.isNotEmpty
+                              ? ClipOval(
+                                  child: SmartPhoto(
+                                    src: _profile.avatarPath,
+                                    width: 96,
+                                    height: 96,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.person_rounded,
+                                  size: 52,
+                                  color: AppColors.primary,
+                                ),
+                        ),
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppColors.white,
+                                width: 2,
                               ),
                             ),
-                            Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.primary),
-                          ],
+                            child: const Icon(
+                              Icons.camera_alt_rounded,
+                              size: 16,
+                              color: AppColors.onPrimary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _profile.fullName.isEmpty
+                      ? AppStrings.t('user_default')
+                      : _profile.fullName,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.montserrat(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 20,
+                    color: AppColors.navy,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _profile.phone,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.montserrat(
+                    color: AppColors.textMuted,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                if (driver) ...[
+                  Center(
+                    child: Material(
+                      color: AppColors.mintSoft,
+                      borderRadius: BorderRadius.circular(24),
+                      child: InkWell(
+                        onTap: _openRole,
+                        borderRadius: BorderRadius.circular(24),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.local_taxi_rounded,
+                                size: 16,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                AppStrings.t('driver'),
+                                style: GoogleFonts.montserrat(
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.primaryDark,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                size: 18,
+                                color: AppColors.primary,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
+                  const SizedBox(height: 14),
+                  SoftCard(
+                    child: Row(
+                      children: [
+                        _Stat(
+                          value: (AuthService.instance.user?.ratingAvg ?? 5.0)
+                              .toStringAsFixed(1),
+                          label: AppStrings.t('rating'),
+                        ),
+                        _Stat(
+                          value:
+                              '${TripCompletionService.instance.driverCompletedCount}',
+                          label: AppStrings.t('trip'),
+                        ),
+                        _Stat(
+                          value:
+                              '${_profile.experienceYears} ${AppStrings.t('years_suffix')}',
+                          label: AppStrings.t('experience'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else ...[
+                  Center(
+                    child: Material(
+                      color: AppColors.mintSoft,
+                      borderRadius: BorderRadius.circular(24),
+                      child: InkWell(
+                        onTap: _openRole,
+                        borderRadius: BorderRadius.circular(24),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.person_outline_rounded,
+                                size: 16,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                AppStrings.t('passenger'),
+                                style: GoogleFonts.montserrat(
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.primaryDark,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                size: 18,
+                                color: AppColors.primary,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SoftCard(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _Stat(
+                          value:
+                              '${TripCompletionService.instance.passengerTripCount}',
+                          label: AppStrings.t('trip'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+              const SizedBox(height: 12),
+              SoftCard(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  children: [
+                    if (registered && driver) ...[
+                      _MenuTile(
+                        icon: Icons.inbox_outlined,
+                        label: AppStrings.t('menu_orders'),
+                        onTap: () => AppNavigation.goTrips(),
+                      ),
+                      _MenuTile(
+                        icon: Icons.add_road_rounded,
+                        label: AppStrings.t('menu_create_trip'),
+                        onTap: () => AppNavigation.goTaxis(),
+                      ),
+                      _MenuTile(
+                        icon: Icons.directions_car_outlined,
+                        label: AppStrings.t('menu_my_car'),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const MyCarScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      _MenuTile(
+                        icon: Icons.chat_bubble_outline_rounded,
+                        label: AppStrings.t('menu_messages'),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const DriverMessagesScreen(),
+                            ),
+                          );
+                        },
+                        trailing: ChatService.instance.hasUnreadForDriver
+                            ? AppStrings.t('new_badge')
+                            : null,
+                      ),
+                      _MenuTile(
+                        icon: Icons.account_balance_wallet_outlined,
+                        label: AppStrings.t('menu_earnings'),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const DriverEarningsScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                    _MenuTile(
+                      icon: Icons.dark_mode_outlined,
+                      label: AppStrings.t('menu_appearance'),
+                      trailing: switch (ThemeService.instance.preference) {
+                        ThemePreference.dark => AppStrings.t('theme_dark'),
+                        ThemePreference.auto => AppStrings.t('theme_auto'),
+                        ThemePreference.light => AppStrings.t('theme_light'),
+                      },
+                      onTap: () => _showThemeSheet(),
+                    ),
+                    if (registered)
+                      _MenuTile(
+                        icon: Icons.settings_outlined,
+                        label: AppStrings.t('menu_settings'),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const AccountSettingsScreen(),
+                          ),
+                        ),
+                      ),
+                    if (registered && PlatformConfigService.instance.bonus)
+                      _MenuTile(
+                        icon: Icons.card_giftcard_outlined,
+                        label: AppStrings.t('menu_rewards'),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const RewardsScreen(),
+                          ),
+                        ),
+                      ),
+                    _MenuTile(
+                      icon: Icons.language_rounded,
+                      label: AppStrings.t('menu_language'),
+                      trailing: _profile.languageLabel(),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const LanguageSettingsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    _MenuTile(
+                      icon: Icons.help_outline_rounded,
+                      label: AppStrings.t('menu_faq'),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const _FaqScreen()),
+                      ),
+                    ),
+                    _MenuTile(
+                      icon: Icons.support_agent_rounded,
+                      label: AppStrings.t('menu_help'),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const _HelpScreen()),
+                      ),
+                    ),
+                    _MenuTile(
+                      icon: Icons.info_outline_rounded,
+                      label: AppStrings.t('menu_about'),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const _AboutScreen()),
+                      ),
+                    ),
+                    _MenuTile(
+                      icon: Icons.system_update_alt_rounded,
+                      label: tr('Ilovani yangilash'),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const AppUpdateScreen(),
+                        ),
+                      ),
+                    ),
+                    if (registered)
+                      _MenuTile(
+                        icon: Icons.logout_rounded,
+                        label: AppStrings.t('menu_logout'),
+                        danger: true,
+                        showChevron: false,
+                        onTap: _confirmLogout,
+                      ),
+                  ],
                 ),
-                const SizedBox(height: 14),
+              ),
+              if (registered && _profile.driverStatus == DriverStatus.none) ...[
+                const SizedBox(height: 12),
                 SoftCard(
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _Stat(
-                        value: '${TripCompletionService.instance.passengerTripCount}',
-                        label: AppStrings.t('trip'),
+                      Icon(Icons.local_taxi_rounded, color: AppColors.primary),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          AppStrings.t('become_driver_prompt'),
+                          style: GoogleFonts.montserrat(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: AppColors.navy,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const BecomeDriverIntroScreen(),
+                            ),
+                          );
+                        },
+                        child: Text(
+                          tr("Boshlash"),
+                          style: GoogleFonts.montserrat(
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primary,
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
               ],
             ],
-            const SizedBox(height: 12),
-            SoftCard(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  if (registered && driver) ...[
-                    _MenuTile(
-                      icon: Icons.inbox_outlined,
-                      label: AppStrings.t('menu_orders'),
-                      onTap: () => AppNavigation.goTrips(),
-                    ),
-                    _MenuTile(
-                      icon: Icons.add_road_rounded,
-                      label: AppStrings.t('menu_create_trip'),
-                      onTap: () => AppNavigation.goTaxis(),
-                    ),
-                    _MenuTile(
-                      icon: Icons.directions_car_outlined,
-                      label: AppStrings.t('menu_my_car'),
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const MyCarScreen()),
-                        );
-                      },
-                    ),
-                    _MenuTile(
-                      icon: Icons.chat_bubble_outline_rounded,
-                      label: AppStrings.t('menu_messages'),
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const DriverMessagesScreen()),
-                        );
-                      },
-                      trailing: ChatService.instance.hasUnreadForDriver ? AppStrings.t('new_badge') : null,
-                    ),
-                    _MenuTile(
-                      icon: Icons.account_balance_wallet_outlined,
-                      label: AppStrings.t('menu_earnings'),
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const DriverEarningsScreen()),
-                        );
-                      },
-                    ),
-                  ],
-                  _MenuTile(
-                    icon: Icons.dark_mode_outlined,
-                    label: AppStrings.t('menu_appearance'),
-                    trailing: switch (ThemeService.instance.preference) {
-                      ThemePreference.dark => AppStrings.t('theme_dark'),
-                      ThemePreference.auto => AppStrings.t('theme_auto'),
-                      ThemePreference.light => AppStrings.t('theme_light'),
-                    },
-                    onTap: () => _showThemeSheet(),
-                  ),
-                  if (registered)
-                    _MenuTile(
-                      icon: Icons.settings_outlined,
-                      label: AppStrings.t('menu_settings'),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
-                      ),
-                    ),
-                  if (registered && PlatformConfigService.instance.bonus)
-                    _MenuTile(
-                      icon: Icons.card_giftcard_outlined,
-                      label: AppStrings.t('menu_rewards'),
-                      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RewardsScreen())),
-                    ),
-                  _MenuTile(
-                    icon: Icons.language_rounded,
-                    label: AppStrings.t('menu_language'),
-                    trailing: _profile.languageLabel(),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const LanguageSettingsScreen()),
-                      );
-                    },
-                  ),
-                  _MenuTile(
-                    icon: Icons.help_outline_rounded,
-                    label: AppStrings.t('menu_faq'),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const _FaqScreen()),
-                    ),
-                  ),
-                  _MenuTile(
-                    icon: Icons.support_agent_rounded,
-                    label: AppStrings.t('menu_help'),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const _HelpScreen()),
-                    ),
-                  ),
-                  _MenuTile(
-                    icon: Icons.info_outline_rounded,
-                    label: AppStrings.t('menu_about'),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const _AboutScreen()),
-                    ),
-                  ),
-                  _MenuTile(
-                    icon: Icons.system_update_alt_rounded,
-                    label: tr('Ilovani yangilash'),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const AppUpdateScreen()),
-                    ),
-                  ),
-                  if (registered)
-                    _MenuTile(
-                      icon: Icons.logout_rounded,
-                      label: AppStrings.t('menu_logout'),
-                      danger: true,
-                      showChevron: false,
-                      onTap: _confirmLogout,
-                    ),
-                ],
-              ),
-            ),
-            if (registered && _profile.driverStatus == DriverStatus.none) ...[
-              const SizedBox(height: 12),
-              SoftCard(
-                child: Row(
-                  children: [
-                    Icon(Icons.local_taxi_rounded, color: AppColors.primary),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        AppStrings.t('become_driver_prompt'),
-                        style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.navy),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const BecomeDriverIntroScreen()),
-                        );
-                      },
-                      child: Text(tr("Boshlash"), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, color: AppColors.primary)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ),
+          ),
         ),
       ),
     );
@@ -507,18 +631,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(AppStrings.t('appearance'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 17, color: AppColors.navy)),
+                Text(
+                  AppStrings.t('appearance'),
+                  style: GoogleFonts.montserrat(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 17,
+                    color: AppColors.navy,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 for (final e in [
-                  (ThemePreference.light, Icons.wb_sunny_outlined, AppStrings.t('theme_light')),
-                  (ThemePreference.dark, Icons.nightlight_round, AppStrings.t('theme_dark')),
-                  (ThemePreference.auto, Icons.brightness_auto_rounded, AppStrings.t('theme_auto')),
+                  (
+                    ThemePreference.light,
+                    Icons.wb_sunny_outlined,
+                    AppStrings.t('theme_light'),
+                  ),
+                  (
+                    ThemePreference.dark,
+                    Icons.nightlight_round,
+                    AppStrings.t('theme_dark'),
+                  ),
+                  (
+                    ThemePreference.auto,
+                    Icons.brightness_auto_rounded,
+                    AppStrings.t('theme_auto'),
+                  ),
                 ])
                   ListTile(
                     leading: Icon(e.$2, color: AppColors.primary),
-                    title: Text(e.$3, style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, color: AppColors.navy)),
+                    title: Text(
+                      e.$3,
+                      style: GoogleFonts.montserrat(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.navy,
+                      ),
+                    ),
                     trailing: ThemeService.instance.preference == e.$1
-                        ? Icon(Icons.check_circle_rounded, color: AppColors.primary)
+                        ? Icon(
+                            Icons.check_circle_rounded,
+                            color: AppColors.primary,
+                          )
                         : null,
                     onTap: () async {
                       await ThemeService.instance.setPreference(e.$1);
@@ -532,18 +684,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
       },
     );
   }
-
 }
 
 class _FaqScreen extends StatelessWidget {
   const _FaqScreen();
 
   static final _items = [
-    (tr('Qanday taksi topaman?'), tr('Bosh sahifada manzillarni kiriting yoki «Taksi topish» bo‘limidan yo‘nalishni tanlang.')),
-    (tr('Oldindan bron qilish mumkinmi?'), tr('Ha. «Oldindan bron qilish» orqali sana, vaqt va narxni belgilashingiz mumkin.')),
-    (tr('To‘lov qanday amalga oshadi?'), tr('Safar oxirida haydovchi bilan kelishilgan narx bo‘yicha naqd yoki o‘tkazma orqali.')),
-    (tr('Haydovchi bo‘lish uchun nima kerak?'), tr('Profildan «Haydovchi bo‘lish» → shaxsiy va avtomobil ma’lumotlarini yuboring. Admin tasdiqlaydi.')),
-    (tr('Buyurtmani bekor qilsam bo‘ladimi?'), tr('Ha, faol bronni bekor qilish mumkin. Sabab so‘raladi.')),
+    (
+      tr('Qanday taksi topaman?'),
+      tr(
+        'Bosh sahifada manzillarni kiriting yoki «Taksi topish» bo‘limidan yo‘nalishni tanlang.',
+      ),
+    ),
+    (
+      tr('Oldindan bron qilish mumkinmi?'),
+      tr(
+        'Ha. «Oldindan bron qilish» orqali sana, vaqt va narxni belgilashingiz mumkin.',
+      ),
+    ),
+    (
+      tr('To‘lov qanday amalga oshadi?'),
+      tr(
+        'Safar oxirida haydovchi bilan kelishilgan narx bo‘yicha naqd yoki o‘tkazma orqali.',
+      ),
+    ),
+    (
+      tr('Haydovchi bo‘lish uchun nima kerak?'),
+      tr(
+        'Profildan «Haydovchi bo‘lish» → shaxsiy va avtomobil ma’lumotlarini yuboring. Admin tasdiqlaydi.',
+      ),
+    ),
+    (
+      tr('Buyurtmani bekor qilsam bo‘ladimi?'),
+      tr('Ha, faol bronni bekor qilish mumkin. Sabab so‘raladi.'),
+    ),
   ];
 
   @override
@@ -561,7 +735,11 @@ class _FaqScreen extends StatelessWidget {
                   child: Text(
                     AppStrings.t('faq_title'),
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.navy),
+                    style: GoogleFonts.montserrat(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                      color: AppColors.navy,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 40),
@@ -575,11 +753,25 @@ class _FaqScreen extends StatelessWidget {
                   child: ExpansionTile(
                     tilePadding: EdgeInsets.zero,
                     childrenPadding: const EdgeInsets.only(bottom: 8),
-                    title: Text(e.$1, style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, color: AppColors.navy, fontSize: 14)),
+                    title: Text(
+                      e.$1,
+                      style: GoogleFonts.montserrat(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.navy,
+                        fontSize: 14,
+                      ),
+                    ),
                     children: [
                       Align(
                         alignment: Alignment.centerLeft,
-                        child: Text(e.$2, style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 13, height: 1.4)),
+                        child: Text(
+                          e.$2,
+                          style: GoogleFonts.montserrat(
+                            color: AppColors.textMuted,
+                            fontSize: 13,
+                            height: 1.4,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -615,7 +807,11 @@ class _HelpScreen extends StatelessWidget {
                   child: Text(
                     AppStrings.t('help_title'),
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 17, color: AppColors.navy),
+                    style: GoogleFonts.montserrat(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 17,
+                      color: AppColors.navy,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 40),
@@ -679,7 +875,10 @@ class _ContactTile extends StatelessWidget {
             Container(
               width: 44,
               height: 44,
-              decoration: BoxDecoration(color: AppColors.mintSoft, borderRadius: BorderRadius.circular(14)),
+              decoration: BoxDecoration(
+                color: AppColors.mintSoft,
+                borderRadius: BorderRadius.circular(14),
+              ),
               child: Icon(icon, color: AppColors.primary),
             ),
             const SizedBox(width: 12),
@@ -687,8 +886,22 @@ class _ContactTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: GoogleFonts.montserrat(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
-                  Text(value, style: GoogleFonts.montserrat(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.navy)),
+                  Text(
+                    title,
+                    style: GoogleFonts.montserrat(
+                      fontSize: 12,
+                      color: AppColors.textMuted,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    value,
+                    style: GoogleFonts.montserrat(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.navy,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -723,9 +936,9 @@ class _AboutScreenState extends State<_AboutScreen> {
     _logoTaps++;
     if (_logoTaps >= 7) {
       _logoTaps = 0;
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const ServerSettingsScreen()),
-      );
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const ServerSettingsScreen()));
     }
   }
 
@@ -744,7 +957,11 @@ class _AboutScreenState extends State<_AboutScreen> {
                   child: Text(
                     AppStrings.t('about_title'),
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 17, color: AppColors.navy),
+                    style: GoogleFonts.montserrat(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 17,
+                      color: AppColors.navy,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 40),
@@ -761,12 +978,20 @@ class _AboutScreenState extends State<_AboutScreen> {
             Text(
               'SAFARON TAXI',
               textAlign: TextAlign.center,
-              style: GoogleFonts.montserrat(fontWeight: FontWeight.w900, fontSize: 24, color: AppColors.navy),
+              style: GoogleFonts.montserrat(
+                fontWeight: FontWeight.w900,
+                fontSize: 24,
+                color: AppColors.navy,
+              ),
             ),
             Text(
               tr('Bir yo‘lda birga'),
               textAlign: TextAlign.center,
-              style: GoogleFonts.montserrat(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 14),
+              style: GoogleFonts.montserrat(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
             ),
             const SizedBox(height: 16),
             SoftCard(
@@ -774,7 +999,11 @@ class _AboutScreenState extends State<_AboutScreen> {
                 '${tr('SAFARON — qishloq va shahar oralig‘ida ishonchli mini-taksi va yo‘lovchi tashish platformasi.')} '
                 '${tr('Tez, qulay va xavfsiz safarlar uchun yaratilgan.')}'
                 '${_version.isEmpty ? '' : '\n\n${tr('Versiya')}: $_version'}',
-                style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 13, height: 1.45),
+                style: GoogleFonts.montserrat(
+                  color: AppColors.textMuted,
+                  fontSize: 13,
+                  height: 1.45,
+                ),
               ),
             ),
           ],
@@ -794,8 +1023,21 @@ class _Stat extends StatelessWidget {
     return Expanded(
       child: Column(
         children: [
-          Text(value, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.navy)),
-          Text(label, style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 11)),
+          Text(
+            value,
+            style: GoogleFonts.montserrat(
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+              color: AppColors.navy,
+            ),
+          ),
+          Text(
+            label,
+            style: GoogleFonts.montserrat(
+              color: AppColors.textMuted,
+              fontSize: 11,
+            ),
+          ),
         ],
       ),
     );
@@ -828,19 +1070,37 @@ class _MenuTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: danger ? AppColors.destination : AppColors.textMuted),
+            Icon(
+              icon,
+              size: 20,
+              color: danger ? AppColors.destination : AppColors.textMuted,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 label,
-                style: GoogleFonts.montserrat(fontWeight: FontWeight.w600, fontSize: 14, color: color),
+                style: GoogleFonts.montserrat(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  color: color,
+                ),
               ),
             ),
             if (trailing != null)
-              Text(trailing!, style: GoogleFonts.montserrat(fontSize: 12, color: AppColors.textMuted)),
+              Text(
+                trailing!,
+                style: GoogleFonts.montserrat(
+                  fontSize: 12,
+                  color: AppColors.textMuted,
+                ),
+              ),
             if (showChevron) ...[
               const SizedBox(width: 4),
-              Icon(Icons.chevron_right_rounded, color: AppColors.textMuted, size: 20),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textMuted,
+                size: 20,
+              ),
             ],
           ],
         ),
