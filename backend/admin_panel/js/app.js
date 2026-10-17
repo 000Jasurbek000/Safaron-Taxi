@@ -606,7 +606,7 @@
     let tab = 'all';
     let q = '';
     const draw = async () => {
-      const role = tab === 'drivers' ? 'driver' : tab === 'users' ? 'passenger' : '';
+      const role = tab === 'drivers' ? 'driver' : '';
       const status = tab === 'blocked' ? 'blocked' : '';
       const data = await api()(`/admin/users?limit=100${role ? '&role=' + role : ''}${status ? '&status=' + status : ''}${q ? '&q=' + encodeURIComponent(q) : ''}`);
       content.innerHTML = u.pageLayout({
@@ -633,7 +633,7 @@
           { label: 'Referal kod', key: 'referral_code', render: (r) => r.referral_code ? `<code>${u.esc(r.referral_code)}</code>` : '—' },
           { label: 'Ro‘yxat', key: 'created_at', render: (r) => u.dt(r.created_at) },
           { label: 'Holat', key: 'is_blocked', render: (r) => u.pill(r.is_blocked ? 'BLOCKED' : 'ACTIVE') },
-          { label: '', key: 'x', render: (r) => `<button class="btn sm primary" data-user="${r.id}">Batafsil</button>` },
+          { label: '', key: 'x', render: (r) => `<button class="btn sm primary" data-user="${r.id}">Batafsil</button> <button class="btn sm danger" data-del-user="${r.id}">🗑</button>` },
         ], data.items)),
       });
       u.bindTabs(content, (k) => { tab = k; draw(); });
@@ -644,6 +644,15 @@
         si.oninput = () => { clearTimeout(t); t = setTimeout(() => { q = si.value.trim(); draw(); }, 350); };
       }
       content.querySelectorAll('[data-user]').forEach((b) => b.onclick = () => openUserDetail(b.dataset.user));
+      content.querySelectorAll('[data-del-user]').forEach((b) => {
+        b.onclick = async () => {
+          const id = b.getAttribute('data-del-user');
+          const row = data.items.find((x) => String(x.id) === String(id));
+          if (!confirm(`${row ? row.full_name : '#' + id} ni butunlay o‘chirasizmi? Bu amalni qaytarib bo‘lmaydi.`)) return;
+          await api()(`/admin/users/${id}`, { method: 'DELETE' });
+          draw();
+        };
+      });
       bindExports(content);
     };
     await draw();
@@ -672,10 +681,19 @@
           { label: 'Reyting', key: 'rating_avg', render: (r) => `★ ${r.rating_avg} · ${r.trips_count} safar` },
           { label: 'Online', key: 'is_online', render: (r) => u.pill(r.is_online ? 'ACTIVE' : 'EXPIRED', [r.is_online ? 'Onlayn' : 'Offline', r.is_online ? 'ok' : '']) },
           { label: 'Holat', key: 'status', render: (r) => u.pill(r.status) },
-          { label: '', key: 'x', render: (r) => `<button class="btn sm primary" data-drv="${r.id}">Batafsil</button>` },
+          { label: '', key: 'x', render: (r) => `<button class="btn sm primary" data-drv="${r.id}">Batafsil</button>` + (forReview ? '' : ` <button class="btn sm danger" data-del-drv="${r.user_id}">🗑</button>`) },
         ], rows)),
     });
     content.querySelectorAll('[data-drv]').forEach((b) => b.onclick = () => openDriverDetail(b.dataset.drv, { forReview }));
+    content.querySelectorAll('[data-del-drv]').forEach((b) => {
+      b.onclick = async () => {
+        const userId = b.getAttribute('data-del-drv');
+        const row = rows.find((x) => String(x.user_id) === String(userId));
+        if (!confirm(`${row ? row.full_name : 'Haydovchi'} ni butunlay o‘chirasizmi? Bu amalni qaytarib bo‘lmaydi.`)) return;
+        await api()(`/admin/users/${userId}`, { method: 'DELETE' });
+        navigate(forReview ? 'applications' : 'drivers');
+      };
+    });
     bindExports(content);
   }
 

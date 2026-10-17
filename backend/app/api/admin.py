@@ -140,12 +140,15 @@ def dashboard(admin: AdminUser = Depends(get_current_admin), db: Session = Depen
         for s in ["SEARCHING", "DRIVER_ACCEPTED", "CONFIRMED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "EXPIRED"]
     }
 
+    active_driver_ids = db.query(DriverProfile.id).join(User, DriverProfile.user_id == User.id).filter(
+        User.deleted_at.is_(None)
+    )
     return {
-        "users_total": db.query(User).count(),
-        "users_active": db.query(User).filter(User.is_active.is_(True), User.is_blocked.is_(False)).count(),
-        "drivers_total": db.query(DriverProfile).filter(DriverProfile.status == "APPROVED").count(),
-        "drivers_online": db.query(DriverProfile).filter(DriverProfile.is_online.is_(True), DriverProfile.status == "APPROVED").count(),
-        "driver_pending": db.query(DriverProfile).filter(DriverProfile.status == "PENDING").count(),
+        "users_total": db.query(User).filter(User.deleted_at.is_(None)).count(),
+        "users_active": db.query(User).filter(User.is_active.is_(True), User.is_blocked.is_(False), User.deleted_at.is_(None)).count(),
+        "drivers_total": db.query(DriverProfile).filter(DriverProfile.status == "APPROVED", DriverProfile.id.in_(active_driver_ids)).count(),
+        "drivers_online": db.query(DriverProfile).filter(DriverProfile.is_online.is_(True), DriverProfile.status == "APPROVED", DriverProfile.id.in_(active_driver_ids)).count(),
+        "driver_pending": db.query(DriverProfile).filter(DriverProfile.status == "PENDING", DriverProfile.id.in_(active_driver_ids)).count(),
         "trips_today": db.query(Trip).filter(func.date(Trip.created_at) == today).count(),
         "trips_active": db.query(Trip).filter(Trip.status.in_(["OPEN", "FULL", "IN_PROGRESS"])).count(),
         "trips_completed": db.query(Trip).filter(Trip.status == "COMPLETED").count(),
@@ -583,7 +586,12 @@ def delete_user(user_id: int, admin: AdminUser = Depends(get_current_admin), db:
 
 @router.get("/drivers")
 def drivers(status: str | None = None, admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
-    q = db.query(DriverProfile).options(joinedload(DriverProfile.user), joinedload(DriverProfile.vehicle), joinedload(DriverProfile.documents))
+    q = (
+        db.query(DriverProfile)
+        .join(User, DriverProfile.user_id == User.id)
+        .filter(User.deleted_at.is_(None))
+        .options(joinedload(DriverProfile.user), joinedload(DriverProfile.vehicle), joinedload(DriverProfile.documents))
+    )
     if status:
         q = q.filter(DriverProfile.status == status.upper())
     rows = q.order_by(DriverProfile.id.desc()).limit(200).all()
