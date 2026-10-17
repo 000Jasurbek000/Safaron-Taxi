@@ -462,7 +462,9 @@
           </div>
         </div>
         <div class="kv">
-          <div class="item"><div class="k">Telefon</div><div class="v">${esc(u.phone)}</div></div>
+          <div class="item"><div class="k">Ism</div><div class="v" id="kvFirstName">${esc(u.first_name)}</div></div>
+          <div class="item"><div class="k">Familiya</div><div class="v" id="kvLastName">${esc(u.last_name)}</div></div>
+          <div class="item"><div class="k">Telefon</div><div class="v" id="kvPhone">${esc(u.phone)}</div></div>
           <div class="item"><div class="k">Rol</div><div class="v">${esc(u.role_label || (u.has_driver ? 'Yo‘lovchi / Haydovchi' : 'Yo‘lovchi'))}</div></div>
           <div class="item"><div class="k">Til</div><div class="v">${esc(u.language)}</div></div>
           <div class="item"><div class="k">Blok</div><div class="v">${u.is_blocked ? badge('BLOCKED') : badge('ACTIVE')}</div></div>
@@ -485,35 +487,63 @@
         <button class="btn danger" id="actDeleteUser">🗑 O‘chirish</button>
       `,
     });
-    modalRoot.querySelector('#actBlock').onclick = async () => {
-      const reason = u.is_blocked ? 'unblock' : (prompt('Bloklash sababi:') || 'Admin');
-      await api()(`/admin/users/${id}/block`, { method: 'POST', body: JSON.stringify({ status: u.is_blocked ? 'UNBLOCK' : 'BLOCK', reason }) });
-      closeModal();
-      navigate('users');
-    };
-    modalRoot.querySelector('#actEditUser').onclick = async () => {
-      const firstName = prompt('Ism:', u.first_name || '');
-      if (firstName === null) return;
-      const lastName = prompt('Familiya:', u.last_name || '');
-      if (lastName === null) return;
-      const phone = prompt('Telefon:', u.phone || '');
-      if (phone === null) return;
-      await api()(`/admin/users/${id}/update`, {
-        method: 'POST',
-        body: JSON.stringify({ first_name: firstName, last_name: lastName, phone }),
-      });
-      closeModal();
-      navigate('users');
-    };
-    modalRoot.querySelector('#actDeleteUser').onclick = async () => {
-      if (!confirm(`${u.full_name} (#${u.id}) ni butunlay o‘chirasizmi? Bu amalni qaytarib bo‘lmaydi — foydalanuvchi tizimga kira olmaydi.`)) return;
-      if (!confirm('Haqiqatan ham ishonchingiz komilmi?')) return;
-      await api()(`/admin/users/${id}`, { method: 'DELETE' });
-      closeModal();
-      navigate('users');
-    };
-    const od = modalRoot.querySelector('#actOpenDriver');
-    if (od) od.onclick = () => openDriverDetail(u.driver_id);
+    function enterEditMode() {
+      const actions = modalRoot.querySelector('.modal-actions');
+      modalRoot.querySelector('#kvFirstName').innerHTML = `<input type="text" id="editFirstName" value="${esc(u.first_name || '')}" />`;
+      modalRoot.querySelector('#kvLastName').innerHTML = `<input type="text" id="editLastName" value="${esc(u.last_name || '')}" />`;
+      modalRoot.querySelector('#kvPhone').innerHTML = `<input type="text" id="editPhone" value="${esc(u.phone || '')}" />`;
+      actions.innerHTML = `
+        <button class="btn primary" id="actSaveUser">💾 Saqlash</button>
+        <button class="btn" id="actCancelEdit">✕ Bekor qilish</button>
+      `;
+      actions.querySelector('#actCancelEdit').onclick = exitEditMode;
+      actions.querySelector('#actSaveUser').onclick = async () => {
+        const first_name = modalRoot.querySelector('#editFirstName').value.trim();
+        const last_name = modalRoot.querySelector('#editLastName').value.trim();
+        const phone = modalRoot.querySelector('#editPhone').value.trim();
+        await api()(`/admin/users/${id}/update`, {
+          method: 'POST',
+          body: JSON.stringify({ first_name, last_name, phone }),
+        });
+        closeModal();
+        navigate('users');
+      };
+    }
+    function exitEditMode() {
+      modalRoot.querySelector('#kvFirstName').textContent = u.first_name || '';
+      modalRoot.querySelector('#kvLastName').textContent = u.last_name || '';
+      modalRoot.querySelector('#kvPhone').textContent = u.phone || '';
+      restoreDefaultActions();
+    }
+    function restoreDefaultActions() {
+      const actions = modalRoot.querySelector('.modal-actions');
+      actions.innerHTML = `
+        <button class="btn" id="actEditUser">✎ Tahrirlash</button>
+        <button class="btn ${u.is_blocked ? '' : 'danger'}" id="actBlock">${u.is_blocked ? '✅ Faollashtirish' : '⛔ Bloklash'}</button>
+        ${u.driver_id ? `<button class="btn blue" id="actOpenDriver">🚕 Haydovchi profili</button>` : ''}
+        <button class="btn danger" id="actDeleteUser">🗑 O‘chirish</button>
+      `;
+      bindDefaultActions();
+    }
+    function bindDefaultActions() {
+      modalRoot.querySelector('#actEditUser').onclick = enterEditMode;
+      modalRoot.querySelector('#actBlock').onclick = async () => {
+        const reason = u.is_blocked ? 'unblock' : (prompt('Bloklash sababi:') || 'Admin');
+        await api()(`/admin/users/${id}/block`, { method: 'POST', body: JSON.stringify({ status: u.is_blocked ? 'UNBLOCK' : 'BLOCK', reason }) });
+        closeModal();
+        navigate('users');
+      };
+      modalRoot.querySelector('#actDeleteUser').onclick = async () => {
+        if (!confirm(`${u.full_name} (#${u.id}) ni butunlay o‘chirasizmi? Bu amalni qaytarib bo‘lmaydi — foydalanuvchi tizimga kira olmaydi.`)) return;
+        if (!confirm('Haqiqatan ham ishonchingiz komilmi?')) return;
+        await api()(`/admin/users/${id}`, { method: 'DELETE' });
+        closeModal();
+        navigate('users');
+      };
+      const od = modalRoot.querySelector('#actOpenDriver');
+      if (od) od.onclick = () => openDriverDetail(u.driver_id);
+    }
+    bindDefaultActions();
   }
 
   async function openRequestDetail(id) {
