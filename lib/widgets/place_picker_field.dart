@@ -43,13 +43,7 @@ class _PlacePickerFieldState extends State<PlacePickerField> {
     super.initState();
     widget.controller.addListener(_onTextChanged);
     PlaceRegistryService.instance.addListener(_refreshSuggestions);
-    _focus.addListener(() {
-      if (_focus.hasFocus) {
-        _refreshSuggestions();
-        // Admin joy nomini o'zgartirgan bo'lsa, ro'yxat ochilganda yangilanadi.
-        PlaceRegistryService.instance.refresh();
-      }
-    });
+    _focus.addListener(_onFocusChanged);
   }
 
   @override
@@ -58,6 +52,18 @@ class _PlacePickerFieldState extends State<PlacePickerField> {
     PlaceRegistryService.instance.removeListener(_refreshSuggestions);
     _focus.dispose();
     super.dispose();
+  }
+
+  void _onFocusChanged() {
+    setState(() {
+      if (_focus.hasFocus) {
+        // Admin joy nomini o'zgartirgan bo'lsa, ro'yxat ochilganda yangilanadi.
+        PlaceRegistryService.instance.refresh();
+        _suggestions = PlaceRegistryService.instance.search(
+          widget.controller.text,
+        );
+      }
+    });
   }
 
   void _onTextChanged() {
