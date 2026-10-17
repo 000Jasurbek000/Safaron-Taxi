@@ -1,15 +1,46 @@
 /// O‘zbekiston davlat raqami.
-/// 01 A 123 BC (o‘rtada 1 harf → oxirida 2 harf)
-/// 01 123 ABC (o‘rtada harf yo‘q → oxirida 3 harf)
+/// 00 A 000 AA (o‘rtada 1 harf → oxirida 2 harf)
+/// 00 000 AAA (o‘rtada harf yo‘q → oxirida 3 harf)
 class PlateUz {
-  /// Ruxsat etilgan viloyat kodlari (13 yo‘q).
+  static const example = '00 A 000 AA yoki 00 000 AAA';
+
+  /// Ruxsat etilgan viloyat kodlari (5 lik qadam).
   static const validRegions = {
     '01', '10', '20', '25', '30', '35', '40', '45', '50', '55',
     '60', '65', '70', '75', '80', '85', '90', '95',
   };
 
+  static const snapMaxDiff = 5;
+
+  static String digits2(String raw) {
+    var d = raw.replaceAll(RegExp(r'\D'), '');
+    if (d.length > 2) d = d.substring(0, 2);
+    return d;
+  }
+
+  /// 93 → 95, 12 → 10, 33 → 35. Farq 5 dan oshsa o‘zgarmaydi.
+  static String snapRegion(String raw) {
+    final d = digits2(raw);
+    if (d.length != 2) return d;
+    if (validRegions.contains(d)) return d;
+    final n = int.tryParse(d);
+    if (n == null) return d;
+    String? best;
+    var bestDiff = 99;
+    for (final v in validRegions) {
+      final vn = int.parse(v);
+      final diff = (vn - n).abs();
+      if (best == null || diff < bestDiff || (diff == bestDiff && vn < int.parse(best))) {
+        best = v;
+        bestDiff = diff;
+      }
+    }
+    if (best != null && bestDiff <= snapMaxDiff) return best;
+    return d;
+  }
+
   static String normalize(String region, String midLetter, String digits, String endLetters) {
-    final r = region.replaceAll(RegExp(r'\D'), '').padLeft(2, '0').substring(0, 2);
+    final r = snapRegion(region).padLeft(2, '0');
     final m = midLetter.replaceAll(RegExp(r'[^A-Za-z]'), '').toUpperCase();
     final d = digits.replaceAll(RegExp(r'\D'), '');
     final e = endLetters.replaceAll(RegExp(r'[^A-Za-z]'), '').toUpperCase();
@@ -17,20 +48,29 @@ class PlateUz {
   }
 
   static bool isValidParts(String region, String midLetter, String digits, String endLetters) {
-    final r = region.replaceAll(RegExp(r'\D'), '');
-    if (r.length != 2 || !validRegions.contains(r)) return false;
+    return partsError(region, midLetter, digits, endLetters) == null;
+  }
 
+  static String? partsError(String region, String midLetter, String digits, String endLetters) {
+    final snapped = snapRegion(region);
+    if (snapped.length != 2 || !validRegions.contains(snapped)) {
+      return 'Viloyat kodi noto‘g‘ri. Namuna: $example';
+    }
     final d = digits.replaceAll(RegExp(r'\D'), '');
-    if (d.length != 3) return false;
-
+    if (d.length != 3) {
+      return 'O‘rtadagi 3 ta raqamni yozing. Namuna: $example';
+    }
     final m = midLetter.replaceAll(RegExp(r'[^A-Za-z]'), '').toUpperCase();
     final e = endLetters.replaceAll(RegExp(r'[^A-Za-z]'), '').toUpperCase();
-
-    if (m.length > 1) return false;
-    if (m.isEmpty) {
-      return e.length == 3;
+    if (m.length > 1) {
+      return 'O‘rtada faqat 1 ta harf yoki bo‘sh. Namuna: $example';
     }
-    return e.length == 2;
+    if (m.isEmpty) {
+      if (e.length != 3) return 'Oxirida 3 ta harf kerak. Namuna: 00 000 AAA';
+      return null;
+    }
+    if (e.length != 2) return 'Oxirida 2 ta harf kerak. Namuna: 00 A 000 AA';
+    return null;
   }
 
   static bool isValid(String raw) {

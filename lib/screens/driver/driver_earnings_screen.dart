@@ -6,7 +6,6 @@ import '../../services/trip_completion_service.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/money.dart';
 import '../../widgets/app_ui.dart';
-import '../../widgets/app_ui.dart';
 import '../../widgets/safaron_header.dart';
 
 class DriverEarningsScreen extends StatelessWidget {
@@ -63,7 +62,7 @@ class DriverEarningsScreen extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${summary.tripCount} ta tugallangan safar',
+                        tr('{n} ta tugallangan safar').replaceAll('{n}', '${summary.tripCount}'),
                         style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 12),
                       ),
                     ],
@@ -74,9 +73,9 @@ class DriverEarningsScreen extends StatelessWidget {
                   children: [
                     Expanded(child: _StatCard(label: tr('Bugun'), value: formatSom(summary.today))),
                     const SizedBox(width: 8),
-                    Expanded(child: _StatCard(label: 'Hafta', value: formatSom(summary.week))),
+                    Expanded(child: _StatCard(label: tr('Hafta'), value: formatSom(summary.week))),
                     const SizedBox(width: 8),
-                    Expanded(child: _StatCard(label: 'Oy', value: formatSom(summary.month))),
+                    Expanded(child: _StatCard(label: tr('Oy'), value: formatSom(summary.month))),
                   ],
                 ),
                 const SizedBox(height: 20),

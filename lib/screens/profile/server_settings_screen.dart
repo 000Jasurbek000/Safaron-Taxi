@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../l10n/phrase.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/api_client.dart';
@@ -31,10 +30,25 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
 
   Future<void> _loadCurrent() async {
     await ApiClient.instance.load();
-    final url = ApiClient.instance.baseUrl;
-    final host = url.replaceAll(RegExp(r'^https?://'), '').replaceAll(':8000', '');
-    _host.text = host;
+    _host.text = ApiClient.instance.baseUrl;
     await _test(silent: true);
+  }
+
+  String _normalizeUrl(String raw) {
+    var host = raw.trim();
+    if (host.isEmpty) return ApiClient.defaultHost;
+    if (host.startsWith('http://') || host.startsWith('https://')) {
+      return host.replaceAll(RegExp(r'/$'), '');
+    }
+    if (RegExp(r'^\d{1,3}(\.\d{1,3}){3}$').hasMatch(host)) {
+      return 'http://$host:8000';
+    }
+    return 'https://$host';
+  }
+
+  Future<void> _useProduction() async {
+    _host.text = ApiClient.defaultHost;
+    await _save();
   }
 
   @override
@@ -48,33 +62,32 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
       _busy = true;
       if (!silent) _status = null;
     });
-    final host = _host.text.trim();
-    final url = host.startsWith('http') ? host : 'http://$host:8000';
+    final url = _normalizeUrl(_host.text);
     final ok = await ServerDiscovery.ping(url);
     if (!mounted) return;
     setState(() {
       _busy = false;
       _connected = ok;
-      _status = ok ? 'Ulandi ✓' : 'Ulanmadi — IP ni tekshiring';
+      _status = ok ? tr('Ulandi ✓') : tr('Ulanmadi — manzilni tekshiring');
     });
   }
 
   Future<void> _save() async {
     final host = _host.text.trim();
     if (host.isEmpty) return;
-    final url = host.startsWith('http') ? host : 'http://$host:8000';
+    final url = _normalizeUrl(host);
     await ApiClient.instance.setBaseUrl(url);
     await _test();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Server manzili saqlandi'), behavior: SnackBarBehavior.floating),
+      SnackBar(content: Text(tr('Server manzili saqlandi')), behavior: SnackBarBehavior.floating),
     );
   }
 
   Future<void> _autoFind() async {
     setState(() {
       _busy = true;
-      _status = 'Qidirilmoqda... (10–20 soniya)';
+      _status = tr('Qidirilmoqda... (10–20 soniya)');
     });
     final found = await ServerDiscovery.discover();
     if (!mounted) return;
@@ -82,17 +95,16 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
       setState(() {
         _busy = false;
         _connected = false;
-        _status = 'Topilmadi. Kompyuter va telefon bir Wi‑Fi da bo‘lsin, backend ishlayaptimi?';
+        _status = tr('Topilmadi. Kompyuter va telefon bir Wi‑Fi da bo‘lsin, backend ishlayaptimi?');
       });
       return;
     }
     await ApiClient.instance.setBaseUrl(found);
-    final host = found.replaceAll(RegExp(r'^https?://'), '').replaceAll(':8000', '');
-    _host.text = host;
+    _host.text = found;
     setState(() {
       _busy = false;
       _connected = true;
-      _status = 'Topildi va saqlandi ✓';
+      _status = tr('Topildi va saqlandi ✓');
     });
   }
 
@@ -109,7 +121,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                 const AppBackButton(),
                 Expanded(
                   child: Text(
-                    'Server sozlamalari',
+                    tr('Server sozlamalari'),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 17, color: AppColors.navy),
                   ),
@@ -121,22 +133,20 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
             SoftCard(
               color: AppColors.mintSoft,
               child: Text(
-                'IP har safar o‘zgarishi mumkin. Bir marta «Avtomatik topish» bosing — keyin saqlanadi. '
-                'Routerda kompyuterga doimiy IP berish ham yaxshi yechim.',
+                tr('Odatiy server: https://safaron.uz. Lokal test uchun IP yoki «Avtomatik topish» ishlating.'),
                 style: GoogleFonts.montserrat(fontSize: 12, height: 1.4, color: AppColors.primaryDark),
               ),
             ),
             const SizedBox(height: 16),
             SoftField(
               controller: _host,
-              hint: '10.65.224.88',
+              hint: 'https://safaron.uz',
               icon: Icons.dns_outlined,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+              keyboardType: TextInputType.url,
             ),
             const SizedBox(height: 8),
             Text(
-              'Hozir: ${ApiClient.instance.baseUrl}',
+              tr('Hozir: {url}').replaceAll('{url}', ApiClient.instance.baseUrl),
               style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted),
             ),
             if (_status != null) ...[
@@ -151,7 +161,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
             ],
             const SizedBox(height: 16),
             PrimaryPillButton(
-              label: _busy ? 'Kutilmoqda...' : 'Avtomatik topish',
+              label: _busy ? tr('Kutilmoqda...') : tr('Avtomatik topish'),
               icon: Icons.radar_rounded,
               enabled: !_busy,
               onTap: _autoFind,
@@ -166,7 +176,12 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
             const SizedBox(height: 10),
             OutlinedButton(
               onPressed: _busy ? null : () => _test(),
-              child: Text('Ulanishni tekshirish', style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
+              child: Text(tr('Ulanishni tekshirish'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton(
+              onPressed: _busy ? null : _useProduction,
+              child: Text(tr('safaron.uz ga qaytish'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
             ),
           ],
         ),

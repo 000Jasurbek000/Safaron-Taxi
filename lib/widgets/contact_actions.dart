@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/taxi_offer.dart';
 import '../theme/app_colors.dart';
+import 'smart_photo.dart';
 import '../screens/booking/driver_chat_screen.dart';
 
 Future<void> showDriverCallSheet(BuildContext context, TaxiOffer taxi) async {
@@ -154,12 +155,11 @@ class BookedTaxiCard extends StatelessWidget {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(14),
-                child: Image.asset(
-                  taxi.imageAsset,
+                child: SmartPhoto(
+                  src: taxi.imageAsset,
+                  fallback: 'assets/images/car_cobalt.png',
                   width: 84,
                   height: 68,
-                  fit: BoxFit.cover,
-                  alignment: const Alignment(0, 0.35),
                 ),
               ),
               const SizedBox(width: 12),
@@ -200,11 +200,11 @@ class BookedTaxiCard extends StatelessWidget {
                 ),
               ),
               ClipOval(
-                child: Image.asset(
-                  'assets/images/driver_avatar.png',
+                child: SmartPhoto(
+                  src: taxi.driverPhoto,
+                  fallback: 'assets/images/driver_avatar.png',
                   width: 46,
                   height: 46,
-                  fit: BoxFit.cover,
                 ),
               ),
             ],
@@ -326,46 +326,46 @@ class TaxiInfoRows extends StatelessWidget {
       children: [
         _InfoRow(
           icon: Icons.directions_car_rounded,
-          label: 'Mashina',
+          label: tr('Mashina'),
           value: '${taxi.carModel} · ${taxi.plate}',
         ),
         const Divider(height: 1),
         _InfoRow(
           icon: Icons.phone_outlined,
-          label: 'Telefon',
+          label: tr('Telefon'),
           value: taxi.phone,
         ),
         const Divider(height: 1),
         _InfoRow(
           icon: Icons.person_outline_rounded,
-          label: 'Haydovchi',
+          label: tr('Haydovchi'),
           value: '${taxi.driverName} · ${taxi.rating}★',
         ),
         if (showRoute) ...[
           const Divider(height: 1),
           _InfoRow(
             icon: Icons.route_rounded,
-            label: 'Marshrut',
+            label: tr('Marshrut'),
             value: '${_short(taxi.from)} → ${_short(taxi.to)}',
           ),
         ],
         const Divider(height: 1),
         _InfoRow(
           icon: Icons.schedule_rounded,
-          label: 'Vaqt',
+          label: tr('Vaqt'),
           value: taxi.time,
         ),
         const Divider(height: 1),
         _InfoRow(
           icon: Icons.event_seat_outlined,
-          label: 'Joylar',
-          value: '$seats ta joy',
+          label: tr('Joylar'),
+          value: tr('{n} ta joy').replaceAll('{n}', '$seats'),
         ),
         if (showPrice) ...[
           const Divider(height: 1),
           _InfoRow(
             icon: Icons.payments_outlined,
-            label: 'Narx',
+            label: tr('Narx'),
             value: taxi.priceLabel,
             valueColor: AppColors.primary,
           ),

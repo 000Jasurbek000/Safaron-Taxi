@@ -2,7 +2,6 @@ import 'dart:io';
 import '../../../l10n/phrase.dart';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -10,6 +9,7 @@ import '../../../services/profile_service.dart';
 import '../../../theme/app_colors.dart';
 import '../../../utils/plate_uz.dart';
 import '../../../widgets/app_ui.dart';
+import '../../../widgets/car_model_picker.dart';
 import '../../../widgets/plate_input_row.dart';
 import '../../../widgets/safaron_header.dart';
 
@@ -30,19 +30,20 @@ class _MyCarScreenState extends State<MyCarScreen> {
   final _midLetter = TextEditingController();
   final _digits = TextEditingController();
   final _endLetters = TextEditingController();
-
-  static const _cars = [
-    'Chevrolet Cobalt',
-    'Chevrolet Nexia',
-    'Chevrolet Spark',
-    'Chevrolet Tracker',
-    'BYD Chazor',
-  ];
+  final _customCar = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _carName = _profile.carName.isEmpty ? _cars.first : _profile.carName;
+    final models = CarModelPicker.models();
+    if (_profile.carName.isEmpty) {
+      _carName = models.first;
+    } else if (models.contains(_profile.carName)) {
+      _carName = _profile.carName;
+    } else {
+      _carName = kOtherCarModel;
+      _customCar.text = _profile.carName;
+    }
     _seats = _profile.seats.clamp(1, 10);
     _photoPath = _profile.carPhotoPath.isEmpty ? null : _profile.carPhotoPath;
     _parsePlate(_profile.plate);
@@ -64,6 +65,7 @@ class _MyCarScreenState extends State<MyCarScreen> {
     _midLetter.dispose();
     _digits.dispose();
     _endLetters.dispose();
+    _customCar.dispose();
     super.dispose();
   }
 
@@ -74,9 +76,14 @@ class _MyCarScreenState extends State<MyCarScreen> {
   }
 
   Future<void> _save() async {
-    if (!PlateUz.isValidParts(_region.text, _midLetter.text, _digits.text, _endLetters.text)) {
+    final snapped = PlateUz.snapRegion(_region.text);
+    if (snapped.length == 2 && snapped != _region.text && PlateUz.validRegions.contains(snapped)) {
+      _region.text = snapped;
+    }
+    final plateErr = PlateUz.partsError(_region.text, _midLetter.text, _digits.text, _endLetters.text);
+    if (plateErr != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('Raqam: 01 A 123 BC yoki 01 123 ABC')), behavior: SnackBarBehavior.floating),
+        SnackBar(content: Text(plateErr), behavior: SnackBarBehavior.floating),
       );
       return;
     }
@@ -84,7 +91,7 @@ class _MyCarScreenState extends State<MyCarScreen> {
       PlateUz.normalize(_region.text, _midLetter.text, _digits.text, _endLetters.text),
     );
     await _profile.saveVehicle(
-      carName: _carName,
+      carName: CarModelPicker.resolve(_carName, _customCar.text),
       plate: plate,
       seats: _seats,
       hasCarPhoto: _photoPath != null,
@@ -93,7 +100,7 @@ class _MyCarScreenState extends State<MyCarScreen> {
     if (!mounted) return;
     setState(() => _editing = false);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Saqlangan'), behavior: SnackBarBehavior.floating),
+      SnackBar(content: Text(tr('Saqlangan')), behavior: SnackBarBehavior.floating),
     );
   }
 
@@ -133,7 +140,7 @@ class _MyCarScreenState extends State<MyCarScreen> {
                       }
                     },
                     child: Text(
-                      _editing ? tr('Saqlash') : 'Tahrirlash',
+                      _editing ? tr('Saqlash') : tr('Tahrirlash'),
                       style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, color: AppColors.primary),
                     ),
                   ),
@@ -167,14 +174,15 @@ class _MyCarScreenState extends State<MyCarScreen> {
                         ),
                         const SizedBox(height: 14),
                         if (_editing) ...[
-                          DropdownButtonFormField<String>(
-                            value: _cars.contains(_carName) ? _carName : _cars.first,
-                            decoration: InputDecoration(labelText: 'Moshina', labelStyle: GoogleFonts.montserrat()),
-                            items: _cars.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                            onChanged: (v) => setState(() => _carName = v ?? _carName),
+                          CarModelPicker(
+                            value: _carName,
+                            customController: _customCar,
+                            onChanged: (v) => setState(() => _carName = v),
                           ),
                           const SizedBox(height: 10),
                           Text(tr('Davlat raqami'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13)),
+                          const SizedBox(height: 4),
+                          Text(tr('Namuna: 00 A 000 AA yoki 00 000 AAA'), style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted)),
                           const SizedBox(height: 8),
                           PlateInputRow(
                             region: _region,
@@ -199,10 +207,10 @@ class _MyCarScreenState extends State<MyCarScreen> {
                             ],
                           ),
                         ] else ...[
-                          _Row(label: 'Moshina nomi', value: _profile.carName),
+                          _Row(label: tr('Moshina nomi'), value: _profile.carName),
                           _Row(label: tr('Davlat raqami'), value: _profile.plate),
-                          _Row(label: "Yo'lovchi sig'imi", value: '${_profile.seats} kishi'),
-                          _Row(label: 'Tajriba', value: '${_profile.experienceYears} yil'),
+                          _Row(label: tr("Yo'lovchi sig'imi"), value: '${_profile.seats} ${tr('kishi')}'),
+                          _Row(label: tr('Tajriba'), value: '${_profile.experienceYears} ${tr('yil')}'),
                         ],
                       ],
                     ),

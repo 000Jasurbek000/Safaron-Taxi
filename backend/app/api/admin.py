@@ -16,6 +16,7 @@ from app.models import (
     BonusTransaction,
     DriverDocument,
     DriverProfile,
+    ErrorLog,
     FraudEvent,
     Location,
     LocationAlias,
@@ -635,6 +636,7 @@ def locations(pending: bool = False, admin: AdminUser = Depends(get_current_admi
             "description": l.description,
             "latitude": l.latitude,
             "longitude": l.longitude,
+            "radius_m": l.radius_m,
             "is_approved": l.is_approved,
             "is_active": l.is_active,
             "aliases": [a.alias for a in l.aliases],
@@ -646,7 +648,16 @@ def locations(pending: bool = False, admin: AdminUser = Depends(get_current_admi
 
 @router.post("/locations", response_model=OkResponse)
 def create_location(body: LocationCreateIn, admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
-    loc = Location(name=body.name.strip(), type=body.type, description=body.description, latitude=body.latitude, longitude=body.longitude, is_approved=True, is_active=True)
+    loc = Location(
+        name=body.name.strip(),
+        type=body.type,
+        description=body.description,
+        latitude=body.latitude,
+        longitude=body.longitude,
+        radius_m=body.radius_m,
+        is_approved=True,
+        is_active=True,
+    )
     db.add(loc)
     db.flush()
     for a in body.aliases:
@@ -655,6 +666,26 @@ def create_location(body: LocationCreateIn, admin: AdminUser = Depends(get_curre
     _log(db, admin, "location_create", "location", loc.id, None, {"name": loc.name})
     db.commit()
     return OkResponse(ok=True, message="Joy qo‘shildi.")
+
+
+@router.post("/locations/{location_id}/update", response_model=OkResponse)
+def update_location(location_id: int, body: LocationCreateIn, admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
+    loc = db.get(Location, location_id)
+    if not loc:
+        raise HTTPException(404, "Joy topilmadi.")
+    loc.name = body.name.strip()
+    loc.type = body.type
+    loc.description = body.description
+    loc.latitude = body.latitude
+    loc.longitude = body.longitude
+    loc.radius_m = body.radius_m
+    db.query(LocationAlias).filter(LocationAlias.location_id == loc.id).delete()
+    for a in body.aliases:
+        if a.strip():
+            db.add(LocationAlias(location_id=loc.id, alias=a.strip()))
+    _log(db, admin, "location_update", "location", loc.id, None, {"name": loc.name, "radius_m": loc.radius_m})
+    db.commit()
+    return OkResponse(ok=True, message="Joy yangilandi.")
 
 
 @router.post("/locations/{location_id}/approve", response_model=OkResponse)
@@ -933,3 +964,37 @@ def logs(admin: AdminUser = Depends(get_current_admin), db: Session = Depends(ge
         }
         for l in rows
     ]
+
+
+@router.get("/errors")
+def list_errors(
+    source: str | None = Query(None),
+    admin: AdminUser = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Server va ilova tomonidan tutilmagan xatolar — Sentry kabi tashqi xizmat
+    ulanmagan bo'lsa ham, muammolarni ko'rish uchun."""
+    q = db.query(ErrorLog)
+    if source:
+        q = q.filter(ErrorLog.source == source)
+    rows = q.order_by(ErrorLog.id.desc()).limit(200).all()
+    return [
+        {
+            "id": e.id,
+            "source": e.source,
+            "message": e.message,
+            "detail": e.detail,
+            "path": e.path,
+            "user_id": e.user_id,
+            "app_version": e.app_version,
+            "created_at": e.created_at,
+        }
+        for e in rows
+    ]
+
+
+@router.delete("/errors", response_model=OkResponse)
+def clear_errors(admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
+    db.query(ErrorLog).delete()
+    db.commit()
+    return OkResponse(ok=True, message="Xatolar tozalandi.")

@@ -1,4 +1,5 @@
 import '../data/place_aliases.dart';
+import '../l10n/phrase.dart';
 import '../services/place_registry_service.dart';
 
 enum TimeOfDayFilter { all, morning, day, evening }
@@ -18,6 +19,9 @@ class TaxiOffer {
     required this.plate,
     required this.phone,
     required this.imageAsset,
+    this.driverPhoto = '',
+    this.driverUserId,
+    this.remoteTripId,
     required this.period,
     this.badge,
     this.duration = '',
@@ -27,6 +31,7 @@ class TaxiOffer {
     this.isOnline = true,
     this.fromAliases = const [],
     this.toAliases = const [],
+    this.avgResponseSec,
   });
 
   final String id;
@@ -42,6 +47,9 @@ class TaxiOffer {
   final String plate;
   final String phone;
   final String imageAsset;
+  final String driverPhoto;
+  final int? driverUserId;
+  final int? remoteTripId;
   final TimeOfDayFilter period;
   final String? badge;
   final String duration;
@@ -49,6 +57,10 @@ class TaxiOffer {
   final bool prebookOnly;
   final int etaMinutes;
   final bool isOnline;
+
+  /// Haydovchi o‘tgan so‘rovlarga o‘rtacha qancha soniyada javob bergani —
+  /// qidiruv natijalarida tezroq javob beradiganlarni yuqoriga chiqarish uchun.
+  final int? avgResponseSec;
 
   /// Asosiy [from] dan tashqari yaqin / qo‘shimcha chiqish nuqtalari.
   final List<String> fromAliases;
@@ -79,10 +91,13 @@ class TaxiOffer {
       buf.write(raw[i]);
       if (fromEnd > 1 && fromEnd % 3 == 1) buf.write(' ');
     }
-    return "${buf.toString()} so'm";
+    return "${buf.toString()} ${tr("so'm")}";
   }
 
   String get shortCar => carModel.split(' ').last;
+
+  /// 5 daqiqadan tezroq javob bersa — "tez javob beradi" belgisi ko‘rsatiladi.
+  bool get isFastResponder => avgResponseSec != null && avgResponseSec! <= 300;
 
   bool matchesSearch(String query) {
     final q = query.trim();
@@ -125,6 +140,9 @@ class TaxiOffer {
       plate: plate,
       phone: phone,
       imageAsset: imageAsset,
+      driverPhoto: driverPhoto,
+      driverUserId: driverUserId,
+      remoteTripId: remoteTripId,
       period: period,
       badge: badge,
       duration: duration,
@@ -134,6 +152,7 @@ class TaxiOffer {
       isOnline: isOnline ?? this.isOnline,
       fromAliases: fromAliases ?? this.fromAliases,
       toAliases: toAliases ?? this.toAliases,
+      avgResponseSec: avgResponseSec,
     );
   }
 }

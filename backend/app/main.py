@@ -6,12 +6,14 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 import time
+import traceback
 from collections import defaultdict
 
 from app.api import admin, app_release, auth, drivers, locations, misc, platform, platform_admin, requests, trips, users
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine, ensure_columns
 from app.seed import seed
+from app.services.error_log import log_error
 
 settings = get_settings()
 Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
@@ -39,6 +41,17 @@ async def value_error_handler(_: Request, exc: ValueError):
 
 @app.exception_handler(Exception)
 async def unhandled(request: Request, exc: Exception):
+    db = SessionLocal()
+    try:
+        log_error(
+            db,
+            source="server",
+            message=str(exc) or exc.__class__.__name__,
+            detail=traceback.format_exc(),
+            path=f"{request.method} {request.url.path}",
+        )
+    finally:
+        db.close()
     # Don't leak stack traces to clients
     return JSONResponse(status_code=500, content={"detail": "Server bilan bog‘lanishda xatolik yuz berdi."})
 

@@ -2,11 +2,12 @@ import 'dart:async';
 
 import 'dart:convert';
 
+import 'dart:io';
+
 
 
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter/foundation.dart';
-
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
@@ -52,9 +53,8 @@ class ApiClient extends ChangeNotifier {
 
 
 
-  /// Faqat birinchi o‘rnatish uchun zaxira. Keyin saqlangan yoki topilgan IP ishlatiladi.
-
-  static const String defaultHost = 'http://10.65.224.88:8000';
+  /// Production API. Lokal testda Profil → Server sozlamalaridan o‘zgartiriladi.
+  static const String defaultHost = 'https://safaron.uz';
 
 
 
@@ -78,22 +78,10 @@ class ApiClient extends ChangeNotifier {
 
     final saved = prefs.getString(_kBase);
 
-    if (saved != null && saved.isNotEmpty) {
-
+    if (saved != null && saved.isNotEmpty && !_isLegacyLanUrl(saved)) {
       baseUrl = saved;
-
-    } else if (kIsWeb) {
-
-      baseUrl = 'http://127.0.0.1:8000';
-
-    } else if (defaultTargetPlatform == TargetPlatform.android) {
-
-      baseUrl = defaultHost;
-
     } else {
-
-      baseUrl = 'http://127.0.0.1:8000';
-
+      baseUrl = defaultHost;
     }
 
     _loaded = true;
@@ -114,7 +102,16 @@ class ApiClient extends ChangeNotifier {
 
 
 
-  /// Server ishlamasa bir Wi‑Fi da avtomatik qidiradi.
+  static bool _isLegacyLanUrl(String url) {
+    final u = url.toLowerCase();
+    return u.contains('127.0.0.1') ||
+        u.contains('localhost') ||
+        u.contains('10.0.2.2') ||
+        u.contains('10.65.224.88') ||
+        RegExp(r'https?://(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)').hasMatch(u);
+  }
+
+  /// Production ishlamasa, faqat saqlangan LAN manzil bo‘lsa qidiradi.
 
   Future<bool> ensureConnected({bool autoDiscover = true}) async {
 
@@ -122,7 +119,7 @@ class ApiClient extends ChangeNotifier {
 
     if (await ServerDiscovery.ping(baseUrl)) return true;
 
-    if (!autoDiscover || _discovering) return false;
+    if (!autoDiscover || _discovering || !_isLegacyLanUrl(baseUrl)) return false;
 
 
 
@@ -185,6 +182,15 @@ class ApiClient extends ChangeNotifier {
   }
 
 
+
+  /// Relativ yo‘lni to‘liq media URL ga aylantiradi (`/uploads/...`).
+  String mediaUrl(String? path) {
+    final raw = (path ?? '').trim();
+    if (raw.isEmpty) return '';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    if (raw.startsWith('/')) return '$baseUrl$raw';
+    return '$baseUrl/uploads/${raw.replaceFirst(RegExp(r'^/+'), '')}';
+  }
 
   Uri _uri(String path, [Map<String, String>? query]) {
 
@@ -371,6 +377,10 @@ class ApiClient extends ChangeNotifier {
       final res = await http.Response.fromStream(streamed);
 
       return _decode(res);
+
+    } on FileSystemException {
+
+      throw ApiException('Fayl topilmadi yoki o‘qib bo‘lmadi.');
 
     } on TimeoutException {
 

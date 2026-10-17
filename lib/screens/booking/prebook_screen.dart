@@ -6,6 +6,7 @@ import '../../theme/app_colors.dart';
 import '../../utils/money.dart';
 import '../../widgets/app_ui.dart';
 import '../../widgets/nav_actions.dart';
+import '../../widgets/place_picker_field.dart';
 import '../../widgets/safaron_header.dart';
 import '../../services/active_booking_service.dart';
 import '../../services/api_client.dart';
@@ -122,8 +123,8 @@ class _PrebookScreenState extends State<PrebookScreen> {
     final offered = parseSomInput(_price.text);
     if (from.isEmpty || to.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Qayerdan va Qayerga manzillarini yozing"),
+        SnackBar(
+          content: Text(tr("Qayerdan va Qayerga manzillarini yozing")),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -137,8 +138,8 @@ class _PrebookScreenState extends State<PrebookScreen> {
     }
     if (offered == null || offered < 1000) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Taklif narxingizni kiriting (masalan: 100000)'),
+        SnackBar(
+          content: Text(tr('Taklif narxingizni kiriting (masalan: 100000)')),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -252,25 +253,35 @@ class _PrebookScreenState extends State<PrebookScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  _PlaceBlock(
-                    label: 'Qayerdan?',
-                    controller: _from,
-                    pinColor: AppColors.primary,
-                    hint: tr('Masalan: uy manzili, mahalla, bozor...'),
+                  SoftCard(
+                    child: PlacePickerField(
+                      label: tr('Qayerdan?'),
+                      hint: tr('Ro‘yxatdan tanlang yoki yozing'),
+                      controller: _from,
+                      accent: AppColors.primary,
+                      mapOpen: false,
+                      onMapTap: () {},
+                      showMap: false,
+                    ),
                   ),
                   const SizedBox(height: 10),
-                  _PlaceBlock(
-                    label: 'Qayerga?',
-                    controller: _to,
-                    pinColor: AppColors.destination,
-                    hint: 'Istalgan manzilni yozing (ro‘yxatda bo‘lmasa ham)',
+                  SoftCard(
+                    child: PlacePickerField(
+                      label: tr('Qayerga?'),
+                      hint: tr('Ro‘yxatdan tanlang yoki yozing'),
+                      controller: _to,
+                      accent: AppColors.destination,
+                      mapOpen: false,
+                      onMapTap: () {},
+                      showMap: false,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   SoftCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Aniq joy (ixtiyoriy)', style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
+                        Text(tr('Aniq joy (ixtiyoriy)'), style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
                         TextField(
                           controller: _exact,
                           decoration: InputDecoration(
@@ -293,7 +304,7 @@ class _PrebookScreenState extends State<PrebookScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Sana', style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
+                                Text(tr('Sana'), style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
                                 const SizedBox(height: 6),
                                 Row(
                                   children: [
@@ -301,7 +312,7 @@ class _PrebookScreenState extends State<PrebookScreen> {
                                     const SizedBox(width: 6),
                                     Expanded(
                                       child: Text(
-                                        '${_date.day}-${_month(_date.month)}, ${_date.year}',
+                                        '${_date.day}-${trMonth(_date.month)}, ${_date.year}',
                                         style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13),
                                       ),
                                     ),
@@ -320,7 +331,7 @@ class _PrebookScreenState extends State<PrebookScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Vaqt', style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
+                                Text(tr('Vaqt'), style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
                                 const SizedBox(height: 6),
                                 Row(
                                   children: [
@@ -345,7 +356,7 @@ class _PrebookScreenState extends State<PrebookScreen> {
                       children: [
                         const Icon(Icons.groups_rounded, color: AppColors.primary),
                         const SizedBox(width: 8),
-                        Expanded(child: Text("Yo'lovchilar soni", style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13))),
+                        Expanded(child: Text(tr("Yo'lovchilar soni"), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13))),
                         _RoundBtn(icon: Icons.remove_rounded, onTap: _passengers <= 1 ? null : () => setState(() => _passengers--)),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -361,10 +372,10 @@ class _PrebookScreenState extends State<PrebookScreen> {
                       children: [
                         const Icon(Icons.luggage_rounded, color: AppColors.primary),
                         const SizedBox(width: 8),
-                        Expanded(child: Text('Bagaj (ixtiyoriy)', style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13))),
-                        _Toggle(label: "Yo'q", selected: !_luggage, onTap: () => setState(() => _luggage = false)),
+                        Expanded(child: Text(tr('Bagaj (ixtiyoriy)'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13))),
+                        _Toggle(label: tr("Yo'q"), selected: !_luggage, onTap: () => setState(() => _luggage = false)),
                         const SizedBox(width: 8),
-                        _Toggle(label: 'Bor', selected: _luggage, onTap: () => setState(() => _luggage = true)),
+                        _Toggle(label: tr('Bor'), selected: _luggage, onTap: () => setState(() => _luggage = true)),
                       ],
                     ),
                   ),
@@ -411,14 +422,14 @@ class _PrebookScreenState extends State<PrebookScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("Qo'shimcha ma'lumot (ixtiyoriy)", style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
+                        Text(tr("Qo'shimcha ma'lumot (ixtiyoriy)"), style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
                         TextField(
                           controller: _note,
                           maxLength: 200,
                           maxLines: 3,
                           decoration: InputDecoration(
                             border: InputBorder.none,
-                            hintText: "Masalan: Katta yo'l bo'yidan olib ketish, bolalar bor...",
+                            hintText: tr("Masalan: Katta yo'l bo'yidan olib ketish, bolalar bor..."),
                             hintStyle: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 13),
                           ),
                           style: GoogleFonts.montserrat(fontWeight: FontWeight.w600, fontSize: 13),
@@ -436,7 +447,7 @@ class _PrebookScreenState extends State<PrebookScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            "So‘rov barcha haydovchilarga boradi. Ular sizning narxingizni qabul qilishi yoki o‘z narxini yozib javob berishi mumkin.",
+                            tr("So‘rov barcha haydovchilarga boradi. Ular sizning narxingizni qabul qilishi yoki o‘z narxini yozib javob berishi mumkin."),
                             style: GoogleFonts.montserrat(fontSize: 12, fontWeight: FontWeight.w500, height: 1.35),
                           ),
                         ),
@@ -449,7 +460,7 @@ class _PrebookScreenState extends State<PrebookScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: PrimaryPillButton(
-                label: "Taksi so'rash",
+                label: tr("Taksi so'rash"),
                 icon: Icons.send_rounded,
                 onTap: _submit,
               ),
@@ -461,61 +472,6 @@ class _PrebookScreenState extends State<PrebookScreen> {
     );
   }
 
-  String _month(int m) {
-    const months = [
-      'yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun',
-      'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr',
-    ];
-    return months[m - 1];
-  }
-}
-
-class _PlaceBlock extends StatelessWidget {
-  const _PlaceBlock({
-    required this.label,
-    required this.controller,
-    required this.pinColor,
-    required this.hint,
-  });
-
-  final String label;
-  final TextEditingController controller;
-  final Color pinColor;
-  final String hint;
-
-  @override
-  Widget build(BuildContext context) {
-    return SoftCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.edit_location_alt_rounded, color: pinColor, size: 18),
-              const SizedBox(width: 6),
-              Text(label, style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13)),
-            ],
-          ),
-          const SizedBox(height: 4),
-          TextField(
-            controller: controller,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: InputDecoration(
-              border: InputBorder.none,
-              isDense: true,
-              hintText: hint,
-              hintStyle: GoogleFonts.montserrat(
-                color: AppColors.textMuted,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 15),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _Toggle extends StatelessWidget {

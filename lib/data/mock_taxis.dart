@@ -3,10 +3,18 @@ import '../services/driver_exclusion_service.dart';
 import '../services/driver_trip_service.dart';
 import '../services/location_service.dart';
 import '../services/place_registry_service.dart';
+import '../services/trip_catalog_service.dart';
 import '../utils/distance_util.dart';
 
 List<TaxiOffer> allCatalogTaxis() {
-  return DriverTripService.instance.publishedCatalogOffers();
+  final remote = TripCatalogService.instance.remote;
+  final local = DriverTripService.instance.publishedCatalogOffers();
+  final seen = <String>{};
+  final out = <TaxiOffer>[];
+  for (final t in [...remote, ...local]) {
+    if (seen.add(t.id)) out.add(t);
+  }
+  return out;
 }
 
 List<TaxiOffer> mockTaxisFor({
@@ -57,8 +65,17 @@ int _byNearest(TaxiOffer a, TaxiOffer b, {String nearName = ''}) {
   final da = _kmTo(a, nearName);
   final db = _kmTo(b, nearName);
   if ((da - db).abs() > 0.05) return da.compareTo(db);
-  if (a.isOnline == b.isOnline) return a.driverName.compareTo(b.driverName);
-  return a.isOnline ? -1 : 1;
+  if (a.isOnline != b.isOnline) return a.isOnline ? -1 : 1;
+  // Masofa va onlayn holati teng bo‘lsa — tezroq javob beradigan haydovchi
+  // yuqorida chiqadi (safar sonini oshirish uchun).
+  final ra = a.avgResponseSec;
+  final rb = b.avgResponseSec;
+  if (ra != null || rb != null) {
+    if (ra == null) return 1;
+    if (rb == null) return -1;
+    if (ra != rb) return ra.compareTo(rb);
+  }
+  return a.driverName.compareTo(b.driverName);
 }
 
 double _kmTo(TaxiOffer taxi, String nearName) {

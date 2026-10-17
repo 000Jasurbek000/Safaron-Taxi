@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/phrase.dart';
 import '../services/profile_service.dart';
+import '../services/safaron_api.dart';
 import '../services/trip_completion_service.dart';
 import 'rating_dialog.dart';
 
@@ -40,8 +42,8 @@ class _PendingRatingListenerState extends State<PendingRatingListener> {
 
     _showing = true;
     final title = isDriver
-        ? '${record.passengerName} ni baholang'
-        : '${record.driverName} ni baholang';
+        ? trRateLabel(record.passengerName)
+        : trRateLabel(record.driverName);
 
     final stars = await showTripRatingDialog(context, title: title);
     if (!mounted) {
@@ -50,6 +52,17 @@ class _PendingRatingListenerState extends State<PendingRatingListener> {
     }
 
     if (stars != null) {
+      final toUserId = isDriver ? record.passengerUserId : record.driverUserId;
+      if (toUserId != null) {
+        try {
+          await RatingApi.instance.rate(
+            toUserId: toUserId,
+            stars: stars,
+            requestId: record.remoteRequestId,
+            tripId: record.remoteTripId,
+          );
+        } catch (_) {}
+      }
       if (isDriver) {
         await _completion.markDriverRatedPassenger(bookingId);
       } else {

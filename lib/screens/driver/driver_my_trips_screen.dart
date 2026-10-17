@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../l10n/phrase.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../services/app_refresh.dart';
 import '../../services/driver_trip_service.dart';
 import '../../services/trip_completion_service.dart';
 import '../../theme/app_colors.dart';
@@ -25,7 +26,11 @@ class DriverMyTripsScreen extends StatelessWidget {
             final trips = svc.activeTrips;
             final accepted = svc.acceptedOrders;
 
-            return ListView(
+            return RefreshIndicator(
+              color: AppColors.primary,
+              onRefresh: AppRefresh.run,
+              child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
               children: [
                 Row(
@@ -77,7 +82,7 @@ class DriverMyTripsScreen extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
-                                    'Faol',
+                                    tr('Faol'),
                                     style: GoogleFonts.montserrat(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800),
                                   ),
                                 ),
@@ -87,7 +92,7 @@ class DriverMyTripsScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 8),
                             Text(t.routeLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 14)),
-                            Text('${t.dateLabel} · ${t.timeLabel} · ${t.seats} joy', style: GoogleFonts.montserrat(fontSize: 12, color: AppColors.textMuted)),
+                            Text('${t.dateLabel} · ${t.timeLabel} · ${t.seats} ${tr('joy')}', style: GoogleFonts.montserrat(fontSize: 12, color: AppColors.textMuted)),
                             if (t.toAliases.isNotEmpty)
                               Text('+ ${t.toAliases.join(', ')}', style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.primaryDark, fontWeight: FontWeight.w600)),
                             const SizedBox(height: 10),
@@ -150,7 +155,7 @@ class DriverMyTripsScreen extends StatelessWidget {
                                   onPressed: () async {
                                     final stars = await showTripRatingDialog(
                                       context,
-                                      title: '${o.passengerName} ni baholang',
+                                      title: trRateLabel(o.passengerName),
                                     );
                                     if (stars == null) return;
                                     await svc.completeOrder(
@@ -160,7 +165,7 @@ class DriverMyTripsScreen extends StatelessWidget {
                                     );
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Safar yakunlandi · $stars★'), behavior: SnackBarBehavior.floating),
+                                        SnackBar(content: Text('${tr('Safar yakunlandi')} · $stars★'), behavior: SnackBarBehavior.floating),
                                       );
                                     }
                                   },
@@ -179,6 +184,7 @@ class DriverMyTripsScreen extends StatelessWidget {
                     ),
                   ),
               ],
+            ),
             );
           },
         ),

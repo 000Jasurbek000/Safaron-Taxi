@@ -4,11 +4,12 @@ import '../../l10n/phrase.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/contact.dart';
 import '../../l10n/app_strings.dart';
-import '../../services/api_client.dart';
+import '../../services/app_refresh.dart';
 import '../../services/auth_service.dart';
 import '../../services/chat_service.dart';
 import '../../services/profile_service.dart';
@@ -29,7 +30,8 @@ import 'language_settings_screen.dart';
 import 'referral_bonus_screens.dart';
 import '../../services/platform_config_service.dart';
 import 'role_select_sheet.dart';
-import 'simple_info_screen.dart';
+import 'app_update_screen.dart';
+import 'server_settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -132,7 +134,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return ColoredBox(
       color: AppColors.white,
       child: SafeArea(
-        child: ListView(
+        child: RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: AppRefresh.run,
+          child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
             Text(
@@ -286,7 +292,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 SoftCard(
                   child: Row(
                     children: [
-                      _Stat(value: '4.9', label: AppStrings.t('rating')),
+                      _Stat(value: (AuthService.instance.user?.ratingAvg ?? 5.0).toStringAsFixed(1), label: AppStrings.t('rating')),
                       _Stat(value: '${TripCompletionService.instance.driverCompletedCount}', label: AppStrings.t('trip')),
                       _Stat(value: '${_profile.experienceYears} ${AppStrings.t('years_suffix')}', label: AppStrings.t('experience')),
                     ],
@@ -399,7 +405,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
                       ),
                     ),
-                  if (registered && (PlatformConfigService.instance.referral || PlatformConfigService.instance.bonus))
+                  if (registered && PlatformConfigService.instance.bonus)
                     _MenuTile(
                       icon: Icons.card_giftcard_outlined,
                       label: AppStrings.t('menu_rewards'),
@@ -434,6 +440,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     label: AppStrings.t('menu_about'),
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const _AboutScreen()),
+                    ),
+                  ),
+                  _MenuTile(
+                    icon: Icons.system_update_alt_rounded,
+                    label: tr('Ilovani yangilash'),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const AppUpdateScreen()),
                     ),
                   ),
                   if (registered)
@@ -473,6 +486,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ],
           ],
+        ),
         ),
       ),
     );
@@ -519,13 +533,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _openInfo(BuildContext context, String title, String body, IconData icon) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SimpleInfoScreen(title: title, body: body, icon: icon),
-      ),
-    );
-  }
 }
 
 class _FaqScreen extends StatelessWidget {
@@ -693,8 +700,34 @@ class _ContactTile extends StatelessWidget {
   }
 }
 
-class _AboutScreen extends StatelessWidget {
+class _AboutScreen extends StatefulWidget {
   const _AboutScreen();
+
+  @override
+  State<_AboutScreen> createState() => _AboutScreenState();
+}
+
+class _AboutScreenState extends State<_AboutScreen> {
+  int _logoTaps = 0;
+  String _version = '';
+
+  @override
+  void initState() {
+    super.initState();
+    PackageInfo.fromPlatform().then((pkg) {
+      if (mounted) setState(() => _version = pkg.version);
+    });
+  }
+
+  void _onLogoTap() {
+    _logoTaps++;
+    if (_logoTaps >= 7) {
+      _logoTaps = 0;
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const ServerSettingsScreen()),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -718,7 +751,12 @@ class _AboutScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 20),
-            const Center(child: SafaronLogo(size: 100, borderRadius: 22)),
+            Center(
+              child: GestureDetector(
+                onTap: _onLogoTap,
+                child: const SafaronLogo(size: 100, borderRadius: 22),
+              ),
+            ),
             const SizedBox(height: 12),
             Text(
               'SAFARON TAXI',
@@ -731,13 +769,14 @@ class _AboutScreen extends StatelessWidget {
               style: GoogleFonts.montserrat(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 14),
             ),
             const SizedBox(height: 16),
-              SoftCard(
-                child: Text(
-                  'SAFARON — qishloq va shahar oralig‘ida ishonchli mini-taksi va yo‘lovchi tashish platformasi. '
-                  'Tez, qulay va xavfsiz safarlar uchun yaratilgan.\n\nVersiya: 1.0.1',
-                  style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 13, height: 1.45),
-                ),
+            SoftCard(
+              child: Text(
+                '${tr('SAFARON — qishloq va shahar oralig‘ida ishonchli mini-taksi va yo‘lovchi tashish platformasi.')} '
+                '${tr('Tez, qulay va xavfsiz safarlar uchun yaratilgan.')}'
+                '${_version.isEmpty ? '' : '\n\n${tr('Versiya')}: $_version'}',
+                style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 13, height: 1.45),
               ),
+            ),
           ],
         ),
       ),
@@ -758,55 +797,6 @@ class _Stat extends StatelessWidget {
           Text(value, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.navy)),
           Text(label, style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 11)),
         ],
-      ),
-    );
-  }
-}
-
-class _RoleRow extends StatelessWidget {
-  const _RoleRow({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    this.badge,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final String? badge;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          child: Row(
-            children: [
-              Icon(icon, color: AppColors.primary, size: 22),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(label, style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.navy)),
-              ),
-              if (badge != null)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Text(badge!, style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.primaryDark, fontWeight: FontWeight.w600)),
-                ),
-              Icon(
-                selected ? Icons.check_circle_rounded : Icons.circle_outlined,
-                color: selected ? AppColors.primary : AppColors.textMuted,
-                size: 22,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

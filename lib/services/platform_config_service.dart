@@ -18,6 +18,14 @@ class PlatformConfigService extends ChangeNotifier {
   bool forceUpdate = false;
   String updateUrl = '';
   String telegramAdmin = 'Safaron_bot';
+  List<String> vehicleModels = const [
+    'Chevrolet Cobalt',
+    'Chevrolet Nexia',
+    'Chevrolet Spark',
+    'Chevrolet Tracker',
+    'BYD Chazor',
+    'Chevrolet Lacetti',
+  ];
   String? error;
 
   Future<void> load() async {
@@ -35,6 +43,10 @@ class PlatformConfigService extends ChangeNotifier {
       forceUpdate = map['force_update'] == true;
       updateUrl = map['update_url'] as String? ?? '';
       telegramAdmin = map['telegram_admin'] as String? ?? telegramAdmin;
+      final models = map['vehicle_models'];
+      if (models is List && models.isNotEmpty) {
+        vehicleModels = models.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+      }
       error = null;
     } catch (e) {
       error = tr('Server bilan bog‘lanib bo‘lmadi. Keyinroq urinib ko‘ring.');

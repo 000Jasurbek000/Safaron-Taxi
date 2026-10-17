@@ -34,8 +34,8 @@ Future<int?> askDriverEtaMinutes(
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           decoration: InputDecoration(
-            hintText: 'Daqiqa',
-            suffixText: 'daq',
+            hintText: tr('Daqiqa'),
+            suffixText: tr('daq'),
             filled: true,
             fillColor: AppColors.surface,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -45,7 +45,7 @@ Future<int?> askDriverEtaMinutes(
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Bekor', style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
+            child: Text(tr('Bekor'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
           ),
           TextButton(
             onPressed: () {
@@ -53,7 +53,7 @@ Future<int?> askDriverEtaMinutes(
               if (n < 1 || n > 300) return;
               Navigator.pop(ctx, n);
             },
-            child: Text('Tasdiqlash', style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, color: AppColors.primary)),
+            child: Text(tr('Tasdiqlash'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, color: AppColors.primary)),
           ),
         ],
       );

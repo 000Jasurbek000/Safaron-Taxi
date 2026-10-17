@@ -1,3 +1,5 @@
+import math
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
@@ -10,6 +12,17 @@ from app.services.notify import notify
 
 router = APIRouter(prefix="/locations", tags=["locations"])
 
+_EARTH_RADIUS_M = 6_371_000.0
+
+
+def _haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Ikki koordinata orasidagi masofa (metrda)."""
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lng2 - lng1)
+    a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    return 2 * _EARTH_RADIUS_M * math.asin(math.sqrt(a))
+
 
 def _loc_out(loc: Location) -> LocationOut:
     return LocationOut(
@@ -19,6 +32,7 @@ def _loc_out(loc: Location) -> LocationOut:
         description=loc.description,
         latitude=loc.latitude,
         longitude=loc.longitude,
+        radius_m=loc.radius_m,
         is_approved=loc.is_approved,
         aliases=[a.alias for a in loc.aliases],
     )
@@ -79,6 +93,40 @@ def suggest_location(body: LocationCreateIn, user: User = Depends(get_current_us
     db.commit()
     loc = db.query(Location).options(joinedload(Location.aliases)).filter(Location.id == loc.id).one()
     return _loc_out(loc)
+
+
+@router.get("/resolve", response_model=LocationOut)
+def resolve_location(
+    lat: float = Query(...),
+    lng: float = Query(...),
+    db: Session = Depends(get_db),
+    _: User | None = Depends(get_optional_user),
+):
+    """Admin belgilagan doira (lat/lng/radius_m) ichiga tushgan nuqta uchun
+    eng yaqin joy nomini topadi — qishloqlarda xaritadan tanlashda nom
+    avtomatik yoziladi (masalan Algabas, radius 1 km)."""
+    rows = (
+        db.query(Location)
+        .options(joinedload(Location.aliases))
+        .filter(
+            Location.is_active.is_(True),
+            Location.is_approved.is_(True),
+            Location.latitude.isnot(None),
+            Location.longitude.isnot(None),
+            Location.radius_m.isnot(None),
+        )
+        .all()
+    )
+    best: Location | None = None
+    best_dist = None
+    for loc in rows:
+        dist = _haversine_m(lat, lng, loc.latitude, loc.longitude)
+        if dist <= loc.radius_m and (best_dist is None or dist < best_dist):
+            best = loc
+            best_dist = dist
+    if best is None:
+        raise HTTPException(404, "Bu nuqta uchun belgilangan joy topilmadi.")
+    return _loc_out(best)
 
 
 @router.get("/{location_id}", response_model=LocationOut)

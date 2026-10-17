@@ -157,6 +157,14 @@ class ChatService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Hisobdan chiqishda — bu qurilmadagi keyingi foydalanuvchi oldingisining
+  /// yozishmalarini (telefon raqamlari bilan) ko‘rmasligi uchun.
+  Future<void> clearForLogout() async {
+    _threads.clear();
+    await _persist();
+    notifyListeners();
+  }
+
   Future<void> _persist() async {
     final prefs = await SharedPreferences.getInstance();
     final data = _threads.values.map((t) => t.toJson()).toList();

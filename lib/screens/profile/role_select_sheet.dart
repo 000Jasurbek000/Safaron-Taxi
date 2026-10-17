@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../l10n/phrase.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../l10n/app_strings.dart';
 import '../../services/profile_service.dart';
 import '../../theme/app_colors.dart';
 
@@ -35,7 +36,7 @@ Future<void> showRoleSelectSheet(BuildContext context) async {
             const SizedBox(height: 12),
             _RoleOption(
               icon: Icons.person_outline_rounded,
-              title: "Yo'lovchi",
+              title: AppStrings.t('passenger'),
               subtitle: tr('Taksi buyurtma qiling'),
               selected: profile.role == AppRole.passenger,
               onTap: () async {
@@ -46,7 +47,7 @@ Future<void> showRoleSelectSheet(BuildContext context) async {
             const SizedBox(height: 8),
             _RoleOption(
               icon: Icons.local_taxi_rounded,
-              title: 'Haydovchi',
+              title: AppStrings.t('driver'),
               subtitle: tr('Safarlarni qabul qiling'),
               selected: profile.role == AppRole.driver,
               onTap: () async {

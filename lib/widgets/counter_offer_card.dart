@@ -74,7 +74,10 @@ class CounterOfferCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '$driverName sizning ${formatSom(offeredPrice)} o‘rniga ${formatSom(counterPrice)} taklif qildi.',
+            tr('{name} sizning {offered} o‘rniga {counter} taklif qildi.')
+                .replaceAll('{name}', driverName)
+                .replaceAll('{offered}', formatSom(offeredPrice))
+                .replaceAll('{counter}', formatSom(counterPrice)),
             style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 13, height: 1.35),
           ),
           const SizedBox(height: 14),
@@ -88,7 +91,7 @@ class CounterOfferCard extends StatelessWidget {
                     side: BorderSide(color: AppColors.destination.withValues(alpha: 0.5)),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: Text('Bekor', style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
+                  child: Text(tr('Bekor'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
                 ),
               ),
               const SizedBox(width: 10),
@@ -102,7 +105,7 @@ class CounterOfferCard extends StatelessWidget {
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: Text('Tasdiqlash', style: GoogleFonts.montserrat(fontWeight: FontWeight.w800)),
+                  child: Text(tr('Tasdiqlash'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800)),
                 ),
               ),
             ],

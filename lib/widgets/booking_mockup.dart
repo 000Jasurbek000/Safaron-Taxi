@@ -12,6 +12,7 @@ import '../theme/app_colors.dart';
 import 'contact_actions.dart';
 import 'nav_actions.dart';
 import 'safaron_header.dart';
+import 'smart_photo.dart';
 
 /// Confetti bilan yashil check — bounce animatsiya.
 class SuccessCheckHero extends StatefulWidget {
@@ -263,11 +264,11 @@ class DriverVehicleCard extends StatelessWidget {
                     clipBehavior: Clip.none,
                     children: [
                       ClipOval(
-                        child: Image.asset(
-                          'assets/images/driver_avatar.png',
+                        child: SmartPhoto(
+                          src: taxi.driverPhoto,
+                          fallback: 'assets/images/driver_avatar.png',
                           width: 58,
                           height: 58,
-                          fit: BoxFit.cover,
                         ),
                       ),
                       Positioned(
@@ -313,7 +314,7 @@ class DriverVehicleCard extends StatelessWidget {
                       children: [
                         const Icon(Icons.star_rounded, size: 15, color: Color(0xFFF5B301)),
                         Text(
-                          ' ${taxi.rating} (${taxi.reviews} ta baho)',
+                          ' ${taxi.rating.toStringAsFixed(1)}',
                           style: GoogleFonts.montserrat(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -342,11 +343,11 @@ class DriverVehicleCard extends StatelessWidget {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child: Image.asset(
-                      taxi.imageAsset,
+                    child: SmartPhoto(
+                      src: taxi.imageAsset,
+                      fallback: 'assets/images/car_cobalt.png',
                       width: 96,
                       height: 58,
-                      fit: BoxFit.cover,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -390,7 +391,7 @@ class DriverVehicleCard extends StatelessWidget {
               Expanded(
                 child: _ContactPill(
                   icon: Icons.chat_bubble_outline_rounded,
-                  label: 'Chat',
+                  label: tr('Chat'),
                   onTap: () => openDriverChat(context, taxi),
                 ),
               ),
@@ -641,8 +642,8 @@ class PricePaymentRow extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("To'lov turi", style: GoogleFonts.montserrat(fontSize: 9, color: AppColors.textMuted)),
-                  Text("Naqd / Yo'lda", style: GoogleFonts.montserrat(fontSize: 11, fontWeight: FontWeight.w700)),
+                  Text(tr("To'lov turi"), style: GoogleFonts.montserrat(fontSize: 9, color: AppColors.textMuted)),
+                  Text(tr("Naqd / Yo'lda"), style: GoogleFonts.montserrat(fontSize: 11, fontWeight: FontWeight.w700)),
                 ],
               ),
             ],

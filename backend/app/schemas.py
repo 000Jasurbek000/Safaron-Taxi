@@ -99,6 +99,7 @@ class LocationOut(BaseModel):
     description: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    radius_m: Optional[float] = None
     is_approved: bool
     aliases: list[str] = []
 
@@ -112,6 +113,7 @@ class LocationCreateIn(BaseModel):
     description: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    radius_m: Optional[float] = None
     aliases: list[str] = []
 
 
@@ -137,6 +139,7 @@ class TripOut(BaseModel):
     driver_reviews: int = 0
     driver_phone: str = ""
     driver_photo: Optional[str] = None
+    driver_avg_response_sec: Optional[int] = None
     car_model: str = ""
     plate: str = ""
     car_photo: Optional[str] = None
@@ -310,6 +313,27 @@ class AdminPasswordChangeIn(BaseModel):
 class StatusUpdateIn(BaseModel):
     status: str
     reason: Optional[str] = None
+
+
+class ClientErrorIn(BaseModel):
+    message: str
+    detail: Optional[str] = None
+    path: Optional[str] = None
+    app_version: Optional[str] = None
+
+
+class ErrorLogOut(BaseModel):
+    id: int
+    source: str
+    message: str
+    detail: Optional[str] = None
+    path: Optional[str] = None
+    user_id: Optional[int] = None
+    app_version: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class NotifyBroadcastIn(BaseModel):

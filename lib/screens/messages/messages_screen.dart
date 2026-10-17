@@ -3,6 +3,7 @@ import '../../l10n/phrase.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../l10n/app_strings.dart';
+import '../../services/app_refresh.dart';
 import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/chat_service.dart';
@@ -105,12 +106,16 @@ class _MessagesBody extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Expanded(
-              child: ListenableBuilder(
+              child: RefreshIndicator(
+                color: AppColors.primary,
+                onRefresh: AppRefresh.run,
+                child: ListenableBuilder(
                 listenable: ChatService.instance,
                 builder: (context, _) {
                   final threads = ChatService.instance.threads;
                   if (threads.isEmpty) {
                     return ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
                       children: [
                         Image.asset(
@@ -143,6 +148,7 @@ class _MessagesBody extends StatelessWidget {
                   }
 
                   return ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
                     itemCount: threads.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 10),
@@ -242,6 +248,7 @@ class _MessagesBody extends StatelessWidget {
                     },
                   );
                 },
+                ),
               ),
             ),
           ],

@@ -3,13 +3,17 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../data/popular_routes.dart';
 import '../../l10n/app_strings.dart';
+import '../../l10n/phrase.dart';
 import '../../models/place_record.dart';
 import '../../services/app_navigation.dart';
-import '../../services/chat_service.dart';
+import '../../services/app_refresh.dart';
 import '../../services/location_place_service.dart';
+import '../../services/notification_service.dart';
+import '../notifications/notifications_screen.dart';
 import '../../services/place_registry_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/theme_service.dart';
+import '../../services/trip_completion_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/active_booking_banner.dart';
 import '../../widgets/exact_pickup_dialog.dart';
@@ -107,6 +111,16 @@ class _HomeScreenState extends State<HomeScreen> {
     await _askExactPickupAndOpen();
   }
 
+  /// Tezkor qayta buyurtma uchun — eng so‘nggi yakunlangan safar yo‘nalishi.
+  CompletedTripRecord? get _lastRoute {
+    for (final r in TripCompletionService.instance.records) {
+      if (r.outcome == TripOutcome.completed && r.from.trim().isNotEmpty && r.to.trim().isNotEmpty) {
+        return r;
+      }
+    }
+    return null;
+  }
+
   Future<void> _fillRouteAndGo(String from, String to) async {
     setState(() {
       _fromController.text = from;
@@ -158,7 +172,11 @@ class _HomeScreenState extends State<HomeScreen> {
       color: AppColors.surface,
       child: SafeArea(
         bottom: false,
-        child: ListView(
+        child: RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: AppRefresh.run,
+          child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
           children: [
             const _TopBar(),
@@ -224,6 +242,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
+            AnimatedBuilder(
+              animation: TripCompletionService.instance,
+              builder: (context, _) {
+                final last = _lastRoute;
+                if (last == null) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 14),
+                  child: _LastRouteCard(
+                    record: last,
+                    onTap: () => _fillRouteAndGo(last.from, last.to),
+                  ),
+                );
+              },
+            ),
             if (popularRoutes().isNotEmpty) ...[
               const SizedBox(height: 28),
               Row(
@@ -273,6 +305,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ],
         ),
+        ),
       ),
     );
   }
@@ -293,6 +326,7 @@ class _TopBarState extends State<_TopBar> {
     super.initState();
     _place.addListener(_refresh);
     _place.ensure();
+    NotificationService.instance.refresh();
   }
 
   void _refresh() {
@@ -308,10 +342,10 @@ class _TopBarState extends State<_TopBar> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([ThemeService.instance, ChatService.instance, ProfileService.instance]),
+      listenable: Listenable.merge([ThemeService.instance, NotificationService.instance, ProfileService.instance]),
       builder: (context, _) {
         final dark = ThemeService.instance.isDark;
-        final hasUnread = ChatService.instance.hasUnread;
+        final hasUnread = NotificationService.instance.hasUnread;
         return Row(
           children: [
             Container(
@@ -362,7 +396,11 @@ class _TopBarState extends State<_TopBar> {
               children: [
                 _CircleAction(
                   icon: Icons.notifications_outlined,
-                  onTap: () => AppNavigation.goMessages(),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()),
+                    );
+                  },
                 ),
                 if (hasUnread)
                   Positioned(
@@ -775,6 +813,66 @@ class _PrebookBand extends StatelessWidget {
                 ),
               ),
               const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppColors.primary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LastRouteCard extends StatelessWidget {
+  const _LastRouteCard({required this.record, required this.onTap});
+
+  final CompletedTripRecord record;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.cardBorder),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(color: AppColors.mintSoft, shape: BoxShape.circle),
+                child: const Icon(Icons.history_rounded, color: AppColors.primary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tr('So‘nggi yo‘nalishingiz'),
+                      style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.navy),
+                    ),
+                    Text(
+                      record.routeLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.montserrat(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                tr('Qayta buyurtma'),
+                style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 12, color: AppColors.primary),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.primary),
             ],
           ),
         ),

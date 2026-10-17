@@ -9,8 +9,10 @@ import '../models/taxi_offer.dart';
 import '../services/active_booking_service.dart';
 import '../services/auth_service.dart';
 import '../services/profile_service.dart';
+import '../services/safaron_api.dart';
 import '../services/trip_completion_service.dart';
 import '../utils/money.dart';
+import 'api_client.dart';
 
 enum PassengerOrderKind { instant, prebook }
 
@@ -46,6 +48,7 @@ class PassengerOrder {
     this.etaArriveAt,
     this.driverEtaMinutes,
     this.pickedUp = false,
+    this.pickedUpAt,
     this.expiresAt,
     this.broadcastGroupId,
   });
@@ -67,6 +70,7 @@ class PassengerOrder {
   final DateTime? etaArriveAt;
   final int? driverEtaMinutes;
   final bool pickedUp;
+  final DateTime? pickedUpAt;
   final String targetTaxiId;
   final DateTime? expiresAt;
   /// Oldindan bron — barcha haydovchilarga yuborilgan guruh id.
@@ -101,6 +105,7 @@ class PassengerOrder {
     DateTime? etaArriveAt,
     int? driverEtaMinutes,
     bool? pickedUp,
+    DateTime? pickedUpAt,
     bool clearEta = false,
     DateTime? expiresAt,
     String? broadcastGroupId,
@@ -123,6 +128,7 @@ class PassengerOrder {
       etaArriveAt: clearEta ? null : (etaArriveAt ?? this.etaArriveAt),
       driverEtaMinutes: driverEtaMinutes ?? this.driverEtaMinutes,
       pickedUp: pickedUp ?? this.pickedUp,
+      pickedUpAt: pickedUpAt ?? this.pickedUpAt,
       targetTaxiId: targetTaxiId,
       expiresAt: expiresAt ?? this.expiresAt,
       broadcastGroupId: broadcastGroupId ?? this.broadcastGroupId,
@@ -148,6 +154,7 @@ class PassengerOrder {
         if (etaArriveAt != null) 'etaArriveAt': etaArriveAt!.toIso8601String(),
         if (driverEtaMinutes != null) 'driverEtaMinutes': driverEtaMinutes,
         'pickedUp': pickedUp,
+        if (pickedUpAt != null) 'pickedUpAt': pickedUpAt!.toIso8601String(),
         if (expiresAt != null) 'expiresAt': expiresAt!.toIso8601String(),
         if (broadcastGroupId != null) 'broadcastGroupId': broadcastGroupId,
       };
@@ -179,6 +186,7 @@ class PassengerOrder {
       etaArriveAt: j['etaArriveAt'] == null ? null : DateTime.tryParse(j['etaArriveAt'] as String),
       driverEtaMinutes: j['driverEtaMinutes'] as int?,
       pickedUp: j['pickedUp'] as bool? ?? false,
+      pickedUpAt: j['pickedUpAt'] == null ? null : DateTime.tryParse(j['pickedUpAt'] as String),
       targetTaxiId: j['targetTaxiId'] as String? ?? '',
       expiresAt: j['expiresAt'] == null ? null : DateTime.tryParse(j['expiresAt'] as String),
       broadcastGroupId: j['broadcastGroupId'] as String?,
@@ -199,6 +207,7 @@ class DriverPublishedTrip {
     required this.createdAt,
     this.toAliases = const [],
     this.active = true,
+    this.minAutoAcceptPrice,
   });
 
   final String id;
@@ -212,6 +221,10 @@ class DriverPublishedTrip {
   final DateTime createdAt;
   final bool active;
 
+  /// Shundan yuqori taklif qilingan narx kelsa, so‘rov qo‘lda kutmasdan
+  /// avtomatik qabul qilinadi (haydovchi javob tezligini oshirish uchun).
+  final int? minAutoAcceptPrice;
+
   bool get isOpenTrip => from.isEmpty && to.isEmpty;
 
   String get routeLabel {
@@ -220,9 +233,9 @@ class DriverPublishedTrip {
     return '$from → $to';
   }
 
-  String get priceLabel => price <= 0 ? 'Yo‘lovchi narx yuboradi' : formatSom(price);
+  String get priceLabel => price <= 0 ? tr('Yo‘lovchi narx yuboradi') : formatSom(price);
 
-  DriverPublishedTrip copyWith({bool? active, int? seats}) {
+  DriverPublishedTrip copyWith({bool? active, int? seats, int? minAutoAcceptPrice, bool clearMinAutoAcceptPrice = false}) {
     return DriverPublishedTrip(
       id: id,
       from: from,
@@ -234,6 +247,7 @@ class DriverPublishedTrip {
       price: price,
       createdAt: createdAt,
       active: active ?? this.active,
+      minAutoAcceptPrice: clearMinAutoAcceptPrice ? null : (minAutoAcceptPrice ?? this.minAutoAcceptPrice),
     );
   }
 
@@ -248,6 +262,7 @@ class DriverPublishedTrip {
         'price': price,
         'createdAt': createdAt.toIso8601String(),
         'active': active,
+        if (minAutoAcceptPrice != null) 'minAutoAcceptPrice': minAutoAcceptPrice,
       };
 
   static DriverPublishedTrip fromJson(Map<String, dynamic> j) => DriverPublishedTrip(
@@ -260,6 +275,7 @@ class DriverPublishedTrip {
         seats: j['seats'] as int,
         price: j['price'] as int? ?? 0,
         createdAt: DateTime.parse(j['createdAt'] as String),
+        minAutoAcceptPrice: j['minAutoAcceptPrice'] as int?,
         active: j['active'] as bool? ?? true,
       );
 }
@@ -274,6 +290,9 @@ class DriverTripService extends ChangeNotifier {
   static const orderTimeout = Duration(hours: 1);
   static const defaultRouteMinutes = 30;
   static const inactiveTimeout = Duration(hours: 5);
+  /// Yo‘lovchi olingandan keyin haydovchi "Safarni yakunlash"ni unutib qoysa —
+  /// shu vaqtdan so‘ng safar avtomatik (muvaffaqiyatli) yakunlanadi.
+  static const autoCompleteAfterPickup = Duration(hours: 2);
 
   bool _loaded = false;
   bool isOnline = true;
@@ -409,6 +428,16 @@ class DriverTripService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Hisobdan chiqishda — bu qurilmadagi keyingi foydalanuvchi oldingisining
+  /// buyurtmalari/safarlarini ko‘rmasligi uchun.
+  Future<void> clearForLogout() async {
+    orders = [];
+    myTrips = [];
+    await _persistOrders();
+    await _persistTrips();
+    notifyListeners();
+  }
+
   void _armExpiryTimer() {
     _expiryTimer?.cancel();
     _expiryTimer = Timer.periodic(const Duration(seconds: 15), (_) {
@@ -420,6 +449,7 @@ class DriverTripService extends ChangeNotifier {
   Future<void> _expireStaleOrders() async {
     final now = DateTime.now();
     var changed = false;
+    final staleToComplete = <String>[];
     orders = [
       for (final o in orders)
         if (o.status == PassengerOrderStatus.open &&
@@ -430,11 +460,20 @@ class DriverTripService extends ChangeNotifier {
             _notifyPassengerExpired(o);
             return o.copyWith(status: PassengerOrderStatus.expired);
           }()
+        else if (o.status == PassengerOrderStatus.pickedUp &&
+            (o.pickedUpAt ?? o.createdAt).add(autoCompleteAfterPickup).isBefore(now))
+          () {
+            // Yo‘lovchi olingan, ammo "Safarni yakunlash" unutilgan — avtomatik
+            // (muvaffaqiyatli) yakunlash uchun belgilaymiz, pastda completeOrder chaqiriladi.
+            staleToComplete.add(o.id);
+            return o;
+          }()
         else if (o.kind == PassengerOrderKind.instant &&
             o.status != PassengerOrderStatus.done &&
             o.status != PassengerOrderStatus.cancelled &&
             o.status != PassengerOrderStatus.expired &&
             o.status != PassengerOrderStatus.open &&
+            o.status != PassengerOrderStatus.pickedUp &&
             o.createdAt.add(inactiveTimeout).isBefore(now))
           () {
             changed = true;
@@ -448,6 +487,9 @@ class DriverTripService extends ChangeNotifier {
     if (changed) {
       await _persistOrders();
       notifyListeners();
+    }
+    for (final id in staleToComplete) {
+      await completeOrder(id, completedBy: TripCompletedBy.auto);
     }
   }
 
@@ -544,6 +586,23 @@ class DriverTripService extends ChangeNotifier {
     orders = [order, ...orders.where((o) => o.id != order.id)];
     await _persistOrders();
     notifyListeners();
+    await _maybeAutoAccept(order);
+  }
+
+  /// Haydovchi belgilagan "minimal narx"dan yuqori taklif kelsa, qo‘lda kutmasdan
+  /// darhol qabul qilinadi — javob tezligi oshsa, safar soni ham oshadi.
+  Future<void> _maybeAutoAccept(PassengerOrder order) async {
+    if (order.status != PassengerOrderStatus.open) return;
+    DriverPublishedTrip? trip;
+    for (final t in myTrips) {
+      if (t.id == order.targetTaxiId && t.active && t.minAutoAcceptPrice != null) {
+        trip = t;
+        break;
+      }
+    }
+    if (trip == null) return;
+    if (order.offeredPrice < trip.minAutoAcceptPrice!) return;
+    await acceptOrder(order.id);
   }
 
   Future<void> acceptOrder(String id, {int? driverPrice, int? etaMinutes}) async {
@@ -605,20 +664,28 @@ class DriverTripService extends ChangeNotifier {
       }
     }
 
-    if (!isCounter && activeTrips.isNotEmpty) {
-      final trip = activeTrips.firstWhere(
-        (t) => t.id == order.targetTaxiId,
-        orElse: () => activeTrips.first,
-      );
-      final left = (trip.seats - order.passengers).clamp(0, trip.seats);
-      myTrips = [
-        for (final t in myTrips)
-          if (t.id == trip.id) t.copyWith(seats: left, active: left > 0) else t,
-      ];
-      await _persistTrips();
+    if (!isCounter) {
+      await _decrementTripSeatsFor(order);
     }
 
     notifyListeners();
+  }
+
+  /// Safar sig‘imidan qabul qilingan yo‘lovchi o‘rindiqlarini ayiradi —
+  /// o‘z narxida va qarshi narx tasdiqlanganda bir xil chaqiriladi,
+  /// aks holda haydovchi sig‘imdan ortiq yo‘lovchi qabul qilib qo‘yishi mumkin.
+  Future<void> _decrementTripSeatsFor(PassengerOrder order) async {
+    if (activeTrips.isEmpty) return;
+    final trip = activeTrips.firstWhere(
+      (t) => t.id == order.targetTaxiId,
+      orElse: () => activeTrips.first,
+    );
+    final left = (trip.seats - order.passengers).clamp(0, trip.seats);
+    myTrips = [
+      for (final t in myTrips)
+        if (t.id == trip.id) t.copyWith(seats: left, active: left > 0) else t,
+    ];
+    await _persistTrips();
   }
 
   Future<void> passengerConfirmCounter(String bookingId) async {
@@ -649,6 +716,7 @@ class DriverTripService extends ChangeNotifier {
         await ActiveBookingService.instance.setStatus(BookingStatus.confirmed, bookingId: bookingId, taxi: taxi);
         await ActiveBookingService.instance.setStatus(BookingStatus.onWay, bookingId: bookingId, taxi: taxi);
       }
+      await _decrementTripSeatsFor(order);
     }
     notifyListeners();
   }
@@ -779,7 +847,7 @@ class DriverTripService extends ChangeNotifier {
     orders = [
       for (final o in orders)
         if (o.id == id)
-          o.copyWith(status: PassengerOrderStatus.pickedUp, pickedUp: true, clearEta: true)
+          o.copyWith(status: PassengerOrderStatus.pickedUp, pickedUp: true, pickedUpAt: DateTime.now(), clearEta: true)
         else
           o,
     ];
@@ -898,12 +966,38 @@ class DriverTripService extends ChangeNotifier {
     String dateLabel = '',
     required int seats,
     int price = 0,
+    int? minAutoAcceptPrice,
     List<String> toAliases = const [],
+    DateTime? scheduledAt,
   }) async {
     final block = publishBlockReason(from: from, to: to);
     if (block != null) throw StateError(block);
+    var scheduled = scheduledAt ?? DateTime.now().add(const Duration(minutes: 5));
+    if (scheduled.isBefore(DateTime.now())) {
+      scheduled = DateTime.now().add(const Duration(minutes: 1));
+    }
+    var id = 'dt_${DateTime.now().microsecondsSinceEpoch}';
+    Object? remoteError;
+    try {
+      final fromText = from.trim().isEmpty ? 'Ochiq' : from.trim();
+      final toText = to.trim().isEmpty ? 'Yo‘nalish ochiq' : to.trim();
+      final remote = await TripApi.instance.create({
+        'from_text': fromText,
+        'to_text': toText == fromText ? '$toText (qaytish)' : toText,
+        'scheduled_at': scheduled.toUtc().toIso8601String(),
+        'seats_total': seats.clamp(1, 15),
+        'price': price < 0 ? 0 : price,
+        if (toAliases.isNotEmpty) 'to_note': toAliases.join(', '),
+      });
+      final remoteId = remote['id'];
+      if (remoteId != null) id = 'dt_$remoteId';
+    } on ApiException catch (e) {
+      remoteError = e;
+    } catch (e) {
+      remoteError = e;
+    }
     final trip = DriverPublishedTrip(
-      id: 'dt_${DateTime.now().millisecondsSinceEpoch}',
+      id: id,
       from: from,
       to: to,
       toAliases: toAliases,
@@ -912,10 +1006,14 @@ class DriverTripService extends ChangeNotifier {
       seats: seats,
       price: price,
       createdAt: DateTime.now(),
+      minAutoAcceptPrice: (minAutoAcceptPrice != null && minAutoAcceptPrice > 0) ? minAutoAcceptPrice : null,
     );
     myTrips = [trip, ...myTrips];
     await _persistTrips();
     notifyListeners();
+    if (remoteError is ApiException && remoteError.statusCode != null) {
+      throw StateError(remoteError.message);
+    }
   }
 
   Future<void> deactivateTrip(String id) async {
@@ -951,7 +1049,7 @@ class DriverTripService extends ChangeNotifier {
   }) async {
     final name = ProfileService.instance.fullName;
     final expires = DateTime.now().add(orderTimeout);
-    final groupId = bookingId ?? (prebook ? 'pre_${DateTime.now().millisecondsSinceEpoch}' : null);
+    final groupId = bookingId ?? (prebook ? 'pre_${DateTime.now().microsecondsSinceEpoch}' : null);
 
     if (prebook && groupId != null) {
       final targets = _broadcastTargetIds(from: from, to: to, passengers: passengers);
@@ -1003,7 +1101,7 @@ class DriverTripService extends ChangeNotifier {
 
     await addPassengerOrder(
       PassengerOrder(
-        id: bookingId ?? 'po_${DateTime.now().millisecondsSinceEpoch}',
+        id: bookingId ?? 'po_${DateTime.now().microsecondsSinceEpoch}',
         kind: prebook ? PassengerOrderKind.prebook : PassengerOrderKind.instant,
         from: from,
         to: to,

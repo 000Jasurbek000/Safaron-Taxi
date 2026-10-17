@@ -1,8 +1,34 @@
 from datetime import datetime
 
+from sqlalchemy.orm import Session
+
 from app.models import DriverProfile, DriverResponse, Trip, TripRequest, User, Vehicle
 from app.schemas import DriverResponseOut, RequestOut, TripOut, UserOut
 from app.services.phone import format_phone_display
+
+
+def compute_avg_response_secs(db: Session, driver_ids: list[int]) -> dict[int, int]:
+    """Har bir haydovchi o‘tgan so‘rovlarga qancha tez javob berganini (soniyada)
+    hisoblaydi — qidiruv natijalarida tezroq javob beradiganlarni yuqoriga chiqarish uchun."""
+    if not driver_ids:
+        return {}
+    rows = (
+        db.query(DriverResponse.driver_id, DriverResponse.updated_at, TripRequest.created_at)
+        .join(TripRequest, TripRequest.id == DriverResponse.request_id)
+        .filter(DriverResponse.driver_id.in_(driver_ids), DriverResponse.status != "PENDING")
+        .all()
+    )
+    sums: dict[int, float] = {}
+    counts: dict[int, int] = {}
+    for driver_id, updated_at, created_at in rows:
+        if updated_at is None or created_at is None:
+            continue
+        delta = (updated_at - created_at).total_seconds()
+        if delta < 0:
+            continue
+        sums[driver_id] = sums.get(driver_id, 0.0) + delta
+        counts[driver_id] = counts.get(driver_id, 0) + 1
+    return {d: int(sums[d] / counts[d]) for d in sums if counts.get(d)}
 
 
 def user_out(user: User) -> UserOut:
@@ -25,7 +51,13 @@ def user_out(user: User) -> UserOut:
     )
 
 
-def trip_out(trip: Trip, driver: DriverProfile | None = None, vehicle: Vehicle | None = None, user: User | None = None) -> TripOut:
+def trip_out(
+    trip: Trip,
+    driver: DriverProfile | None = None,
+    vehicle: Vehicle | None = None,
+    user: User | None = None,
+    avg_response_sec: int | None = None,
+) -> TripOut:
     d = driver
     v = vehicle
     u = user
@@ -38,6 +70,7 @@ def trip_out(trip: Trip, driver: DriverProfile | None = None, vehicle: Vehicle |
         driver_reviews=d.rating_count if d else 0,
         driver_phone=u.phone if u else "",
         driver_photo=(d.photo_path if d else None) or (u.avatar_path if u else None),
+        driver_avg_response_sec=avg_response_sec,
         car_model=v.model_name if v else "",
         plate=v.plate if v else "",
         car_photo=v.photo_path if v else None,

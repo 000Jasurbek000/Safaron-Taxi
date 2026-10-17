@@ -4,8 +4,11 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../data/mock_taxis.dart';
 import '../../models/taxi_offer.dart';
+import '../../services/app_refresh.dart';
 import '../../services/auth_service.dart';
 import '../../services/location_service.dart';
+import '../../services/trip_catalog_service.dart';
+import '../../widgets/smart_photo.dart';
 import '../../l10n/app_strings.dart';
 import '../../services/profile_service.dart';
 import '../../theme/app_colors.dart';
@@ -30,6 +33,7 @@ class _TaxisScreenState extends State<TaxisScreen> {
     super.initState();
     _search.addListener(() => setState(() {}));
     LocationService.instance.start();
+    TripCatalogService.instance.refresh();
   }
 
   @override
@@ -66,7 +70,7 @@ class _TaxisScreenState extends State<TaxisScreen> {
 
     final searched = _search.text.trim().isNotEmpty;
     return ListenableBuilder(
-      listenable: Listenable.merge([LocationService.instance, ProfileService.instance]),
+      listenable: Listenable.merge([LocationService.instance, ProfileService.instance, TripCatalogService.instance]),
       builder: (context, _) => ColoredBox(
       color: AppColors.surface,
       child: SafeArea(
@@ -193,8 +197,12 @@ class _TaxisScreenState extends State<TaxisScreen> {
             ),
             const SizedBox(height: 8),
             Expanded(
-              child: taxis.isEmpty
+              child: RefreshIndicator(
+                color: AppColors.primary,
+                onRefresh: AppRefresh.run,
+                child: taxis.isEmpty
                   ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
                       children: [
                         Image.asset(
@@ -221,6 +229,7 @@ class _TaxisScreenState extends State<TaxisScreen> {
                       ],
                     )
                   : ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
                       itemCount: taxis.length,
                       separatorBuilder: (_, _) => const SizedBox(height: 10),
@@ -265,6 +274,7 @@ class _TaxisScreenState extends State<TaxisScreen> {
                         );
                       },
                     ),
+              ),
             ),
           ],
         ),
@@ -381,11 +391,11 @@ class _CatalogTaxiCard extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Image.asset(
-                        taxi.imageAsset,
+                      SmartPhoto(
+                        src: taxi.imageAsset,
+                        fallback: 'assets/images/car_cobalt.png',
                         width: 88,
                         height: 70,
-                        fit: BoxFit.cover,
                       ),
                       Container(
                         width: 88,

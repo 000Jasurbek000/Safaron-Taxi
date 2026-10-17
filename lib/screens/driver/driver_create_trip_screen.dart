@@ -26,6 +26,7 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
   final _to = TextEditingController();
   final _extra = TextEditingController();
   final _price = TextEditingController();
+  final _minAutoAccept = TextEditingController();
   late int _seats;
   DateTime _date = DateTime.now();
   TimeOfDay _time = TimeOfDay.now();
@@ -42,16 +43,11 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
     _to.dispose();
     _extra.dispose();
     _price.dispose();
+    _minAutoAccept.dispose();
     super.dispose();
   }
 
-  String get _dateLabel {
-    const months = [
-      'yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun',
-      'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr',
-    ];
-    return '${_date.day}-${months[_date.month - 1]}, ${_date.year}';
-  }
+  String get _dateLabel => '${_date.day}-${trMonth(_date.month)}, ${_date.year}';
 
   String get _timeLabel =>
       '${_time.hour.toString().padLeft(2, '0')}:${_time.minute.toString().padLeft(2, '0')}';
@@ -94,6 +90,7 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toList();
+    final minAutoAccept = parseSomInput(_minAutoAccept.text.trim());
 
     try {
       await DriverTripService.instance.publishTrip(
@@ -104,6 +101,8 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
         dateLabel: _dateLabel,
         seats: _seats,
         price: price ?? 0,
+        minAutoAcceptPrice: (price ?? 0) <= 0 ? minAutoAccept : null,
+        scheduledAt: DateTime(_date.year, _date.month, _date.day, _time.hour, _time.minute),
       );
     } on StateError catch (e) {
       if (!mounted) return;
@@ -116,7 +115,7 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
     if (!mounted) return;
     final msg = (price ?? 0) <= 0
         ? tr('Ochiq taksi e’lon qilindi — yo‘lovchi narx yuboradi')
-        : 'Safar e’lon qilindi · ${formatSom(price!)}';
+        : tr('Safar e’lon qilindi · {price}').replaceAll('{price}', formatSom(price!));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
     );
@@ -125,6 +124,7 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
     _to.clear();
     _extra.clear();
     _price.clear();
+    _minAutoAccept.clear();
     setState(() {});
   }
 
@@ -196,7 +196,7 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
                     child: Column(
                       children: [
                         PlacePickerField(
-                          label: 'Qayerdan (ixtiyoriy)',
+                          label: tr("Qayerdan (ixtiyoriy)"),
                           hint: tr('Manzilni tanlang'),
                           controller: _from,
                           accent: AppColors.primary,
@@ -205,7 +205,7 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
                         ),
                         const Divider(height: 1),
                         PlacePickerField(
-                          label: 'Qayerga (ixtiyoriy)',
+                          label: tr("Qayerga (ixtiyoriy)"),
                           hint: tr('Manzilni tanlang'),
                           controller: _to,
                           accent: AppColors.destination,
@@ -216,8 +216,8 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
                         TextField(
                           controller: _extra,
                           decoration: InputDecoration(
-                            labelText: 'Qo‘shimcha manzillar (vergul bilan)',
-                            hintText: 'Algabas, Sadvin, Balnitsa',
+                            labelText: tr("Qo'shimcha manzillar (vergul bilan)"),
+                            hintText: tr('Algabas, Sadvin, Balnitsa'),
                             hintStyle: GoogleFonts.montserrat(fontSize: 12, color: AppColors.textMuted),
                             labelStyle: GoogleFonts.montserrat(fontSize: 12),
                             border: InputBorder.none,
@@ -238,7 +238,7 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Sana', style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted)),
+                                Text(tr('Sana'), style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted)),
                                 Text(_dateLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 13)),
                               ],
                             ),
@@ -250,7 +250,7 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Vaqt', style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted)),
+                                Text(tr('Vaqt'), style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted)),
                                 Text(_timeLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 13)),
                               ],
                             ),
@@ -283,7 +283,7 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Narx (ixtiyoriy)', style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 14)),
+                        Text(tr('Narx (ixtiyoriy)'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 14)),
                         Text(
                           tr('Bo‘sh qoldirsangiz yo‘lovchi narx yuboradi. Yozsangiz — shu narx ko‘rinadi.'),
                           style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted, height: 1.3),
@@ -302,6 +302,42 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
                             suffixStyle: GoogleFonts.montserrat(fontWeight: FontWeight.w700, color: AppColors.primaryDark),
                           ),
                           style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 22, color: AppColors.primaryDark),
+                        ),
+                        AnimatedBuilder(
+                          animation: _price,
+                          builder: (context, _) {
+                            if (parseSomInput(_price.text) != null && (parseSomInput(_price.text) ?? 0) > 0) {
+                              return const SizedBox.shrink();
+                            }
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const SizedBox(height: 12),
+                                Divider(height: 1, color: AppColors.cardBorder),
+                                const SizedBox(height: 10),
+                                Text(tr('Minimal avtomatik qabul narxi (ixtiyoriy)'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 13)),
+                                Text(
+                                  tr('Yo‘lovchi shundan yuqori narx yuborsa, so‘rov darhol (siz kutmasdan) qabul qilinadi.'),
+                                  style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted, height: 1.3),
+                                ),
+                                const SizedBox(height: 6),
+                                TextField(
+                                  controller: _minAutoAccept,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                  decoration: InputDecoration(
+                                    border: InputBorder.none,
+                                    isDense: true,
+                                    hintText: tr('Masalan: 20000'),
+                                    hintStyle: GoogleFonts.montserrat(color: AppColors.textMuted),
+                                    suffixText: tr("so'm"),
+                                    suffixStyle: GoogleFonts.montserrat(fontWeight: FontWeight.w700, color: AppColors.primaryDark),
+                                  ),
+                                  style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.primaryDark),
+                                ),
+                              ],
+                            );
+                          },
                         ),
                       ],
                     ),

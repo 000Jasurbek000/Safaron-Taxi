@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../l10n/phrase.dart';
 import '../../services/api_client.dart';
@@ -22,8 +23,8 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
   double _progress = 0;
   String? _message;
 
-  static const _localVersion = '1.0.2';
-  static const _localBuild = 3;
+  String _localVersion = '';
+  int _localBuild = 0;
 
   @override
   void initState() {
@@ -36,14 +37,17 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
       _loading = true;
       _message = null;
     });
+    final pkg = await PackageInfo.fromPlatform();
     await ApiClient.instance.ensureConnected();
     final info = await AppUpdateService.instance.fetchInfo();
     if (!mounted) return;
     setState(() {
+      _localVersion = pkg.version;
+      _localBuild = int.tryParse(pkg.buildNumber) ?? 0;
       _loading = false;
       _remote = info;
       if (info == null) {
-        _message = 'Serverdan versiya olinmadi. Avval serverga ulaning.';
+        _message = tr('Serverdan versiya olinmadi. Avval serverga ulaning.');
       }
     });
   }
@@ -94,7 +98,7 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
                 const AppBackButton(),
                 Expanded(
                   child: Text(
-                    'Ilovani yangilash',
+                    tr('Ilovani yangilash'),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 17, color: AppColors.navy),
                   ),
@@ -107,13 +111,13 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Telefoningizdagi versiya', style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 12)),
+                  Text(tr('Telefoningizdagi versiya'), style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 12)),
                   Text('$_localVersion (build $_localBuild)', style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 16)),
                   const SizedBox(height: 12),
-                  Text('Serverdagi versiya', style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 12)),
+                  Text(tr('Serverdagi versiya'), style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 12)),
                   Text(
                     _loading
-                        ? 'Tekshirilmoqda...'
+                        ? tr('Tekshirilmoqda...')
                         : remote == null
                             ? '—'
                             : '${remote.version} (build ${remote.build})',
@@ -121,7 +125,7 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
                   ),
                   if (remote?.apkSizeMb != null) ...[
                     const SizedBox(height: 6),
-                    Text('Hajmi: ~${remote!.apkSizeMb} MB', style: GoogleFonts.montserrat(fontSize: 12, color: AppColors.textMuted)),
+                    Text(tr('Hajmi: ~{mb} MB').replaceAll('{mb}', '${remote!.apkSizeMb}'), style: GoogleFonts.montserrat(fontSize: 12, color: AppColors.textMuted)),
                   ],
                 ],
               ),
@@ -130,8 +134,7 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
             SoftCard(
               color: AppColors.mintSoft,
               child: Text(
-                'Telegram kerak emas: kompyuterda APK yangilang → telefondan shu yerda «Yuklab o‘rnatish» bosing. '
-                'Telefon va kompyuter bir Wi‑Fi da bo‘lishi shart.',
+                tr('Yangi versiya chiqsa shu yerda «Yuklab o‘rnatish» bosing. APK https://safaron.uz orqali yuklanadi.'),
                 style: GoogleFonts.montserrat(fontSize: 12, height: 1.4, color: AppColors.primaryDark),
               ),
             ),
@@ -140,12 +143,12 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
               LinearProgressIndicator(value: _progress > 0 ? _progress : null),
               const SizedBox(height: 8),
               Text(
-                _progress > 0 ? '${(_progress * 100).toStringAsFixed(0)}%' : 'Yuklanmoqda...',
+                _progress > 0 ? '${(_progress * 100).toStringAsFixed(0)}%' : tr('Yuklanmoqda...'),
                 style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
               ),
             ] else ...[
               PrimaryPillButton(
-                label: hasUpdate ? 'Yangi versiyani yuklab o‘rnatish' : tr('Qayta tekshirish'),
+                label: hasUpdate ? tr('Yangi versiyani yuklab o‘rnatish') : tr('Qayta tekshirish'),
                 icon: hasUpdate ? Icons.system_update_alt_rounded : Icons.refresh_rounded,
                 enabled: !_loading,
                 onTap: hasUpdate ? _downloadAndInstall : _check,
@@ -154,7 +157,7 @@ class _AppUpdateScreenState extends State<AppUpdateScreen> {
                 const SizedBox(height: 10),
                 OutlinedButton(
                   onPressed: _downloadAndInstall,
-                  child: Text('Baribir qayta o‘rnatish', style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
+                  child: Text(tr('Baribir qayta o‘rnatish'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
                 ),
               ],
             ],

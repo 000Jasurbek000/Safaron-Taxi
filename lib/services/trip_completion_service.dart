@@ -4,7 +4,7 @@ import '../l10n/phrase.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum TripCompletedBy { driver, passenger }
+enum TripCompletedBy { driver, passenger, auto }
 
 enum TripOutcome { completed, cancelled, expired }
 
@@ -23,6 +23,10 @@ class CompletedTripRecord {
     this.outcome = TripOutcome.completed,
     this.cancelReason,
     this.cancelledBy,
+    this.driverUserId,
+    this.passengerUserId,
+    this.remoteTripId,
+    this.remoteRequestId,
   });
 
   final String bookingId;
@@ -38,6 +42,10 @@ class CompletedTripRecord {
   final TripOutcome outcome;
   final String? cancelReason;
   final String? cancelledBy;
+  final int? driverUserId;
+  final int? passengerUserId;
+  final int? remoteTripId;
+  final int? remoteRequestId;
 
   String get routeLabel {
     if (from.isEmpty && to.isEmpty) return 'Safar';
@@ -70,6 +78,10 @@ class CompletedTripRecord {
       driverName: driverName,
       driverRatedPassenger: driverRatedPassenger ?? this.driverRatedPassenger,
       passengerRatedDriver: passengerRatedDriver ?? this.passengerRatedDriver,
+      driverUserId: driverUserId,
+      passengerUserId: passengerUserId,
+      remoteTripId: remoteTripId,
+      remoteRequestId: remoteRequestId,
     );
   }
 
@@ -87,6 +99,10 @@ class CompletedTripRecord {
         'outcome': outcome.name,
         if (cancelReason != null) 'cancelReason': cancelReason,
         if (cancelledBy != null) 'cancelledBy': cancelledBy,
+        if (driverUserId != null) 'driverUserId': driverUserId,
+        if (passengerUserId != null) 'passengerUserId': passengerUserId,
+        if (remoteTripId != null) 'remoteTripId': remoteTripId,
+        if (remoteRequestId != null) 'remoteRequestId': remoteRequestId,
       };
 
   static CompletedTripRecord fromJson(Map<String, dynamic> j) => CompletedTripRecord(
@@ -103,6 +119,10 @@ class CompletedTripRecord {
         outcome: TripOutcome.values.byName(j['outcome'] as String? ?? 'completed'),
         cancelReason: j['cancelReason'] as String?,
         cancelledBy: j['cancelledBy'] as String?,
+        driverUserId: j['driverUserId'] as int?,
+        passengerUserId: j['passengerUserId'] as int?,
+        remoteTripId: j['remoteTripId'] as int?,
+        remoteRequestId: j['remoteRequestId'] as int?,
       );
 }
 
@@ -148,6 +168,16 @@ class TripCompletionService extends ChangeNotifier {
       }
     }
     _loaded = true;
+    notifyListeners();
+  }
+
+  /// Hisobdan chiqishda — bu qurilmadagi keyingi foydalanuvchi oldingisining
+  /// daromad/safar tarixini ko‘rmasligi uchun.
+  Future<void> clearForLogout() async {
+    records = [];
+    pendingDriverRatingBookingId = null;
+    pendingPassengerRatingBookingId = null;
+    await _persist();
     notifyListeners();
   }
 
@@ -246,6 +276,10 @@ class TripCompletionService extends ChangeNotifier {
     String driverName = 'Haydovchi',
     bool driverRatedPassenger = false,
     bool passengerRatedDriver = false,
+    int? driverUserId,
+    int? passengerUserId,
+    int? remoteTripId,
+    int? remoteRequestId,
   }) async {
     final existing = byBookingId(bookingId);
     if (existing != null) {
@@ -271,6 +305,10 @@ class TripCompletionService extends ChangeNotifier {
       driverName: driverName,
       driverRatedPassenger: driverRatedPassenger,
       passengerRatedDriver: passengerRatedDriver,
+      driverUserId: driverUserId,
+      passengerUserId: passengerUserId,
+      remoteTripId: remoteTripId,
+      remoteRequestId: remoteRequestId,
     );
     records = [record, ...records];
     await _persist();

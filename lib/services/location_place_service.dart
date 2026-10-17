@@ -14,8 +14,8 @@ class LocationPlaceService extends ChangeNotifier {
   bool loading = false;
   bool denied = false;
 
-  Future<void> ensure() async {
-    if (loading) return;
+  Future<void> ensure({bool force = false}) async {
+    if (loading && !force) return;
     loading = true;
     notifyListeners();
     try {
@@ -50,7 +50,9 @@ class LocationPlaceService extends ChangeNotifier {
     final uri = Uri.parse(
       'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=$lat&lon=$lon&accept-language=uz',
     );
-    final res = await http.get(uri, headers: {'User-Agent': 'SAFARON/1.0'});
+    final res = await http
+        .get(uri, headers: {'User-Agent': 'SAFARON/1.0'})
+        .timeout(const Duration(seconds: 10));
     if (res.statusCode != 200) {
       return ('Joylashuv', '${lat.toStringAsFixed(3)}, ${lon.toStringAsFixed(3)}');
     }

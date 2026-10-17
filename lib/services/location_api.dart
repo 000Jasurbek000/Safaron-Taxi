@@ -8,6 +8,7 @@ class LocationItem {
     this.description,
     this.latitude,
     this.longitude,
+    this.radiusM,
     this.aliases = const [],
   });
 
@@ -17,6 +18,7 @@ class LocationItem {
   final String? description;
   final double? latitude;
   final double? longitude;
+  final double? radiusM;
   final List<String> aliases;
 
   factory LocationItem.fromJson(Map<String, dynamic> j) => LocationItem(
@@ -26,6 +28,7 @@ class LocationItem {
         description: j['description'] as String?,
         latitude: (j['latitude'] as num?)?.toDouble(),
         longitude: (j['longitude'] as num?)?.toDouble(),
+        radiusM: (j['radius_m'] as num?)?.toDouble(),
         aliases: (j['aliases'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       );
 }

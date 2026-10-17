@@ -74,7 +74,7 @@ Future<String?> showCancelReasonSheet(BuildContext context) async {
                       }),
                     ),
                   _ReasonTile(
-                    label: 'Boshqa',
+                    label: tr('Boshqa'),
                     selected: selected == 'Boshqa',
                     onTap: () => setModal(() => selected = 'Boshqa'),
                   ),
@@ -118,7 +118,7 @@ Future<String?> showCancelReasonSheet(BuildContext context) async {
                             ),
                           ),
                           child: Text(
-                            'Orqaga',
+                            tr('Orqaga'),
                             style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
                           ),
                         ),

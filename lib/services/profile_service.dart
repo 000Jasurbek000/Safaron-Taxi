@@ -1,7 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'active_booking_service.dart';
+import 'api_client.dart';
 import 'auth_service.dart';
+import 'chat_service.dart';
+import 'driver_trip_service.dart';
+import 'trip_completion_service.dart';
 
 enum AppRole { passenger, driver }
 
@@ -200,6 +205,15 @@ class ProfileService extends ChangeNotifier {
       await prefs.remove(_kAvatarPath);
     } else {
       await prefs.setString(_kAvatarPath, path);
+      try {
+        if (AuthService.instance.registered) {
+          await ApiClient.instance.postMultipart(
+            '/api/users/me/avatar',
+            fields: const {},
+            files: {'file': path},
+          );
+        }
+      } catch (_) {}
     }
     notifyListeners();
   }
@@ -222,6 +236,12 @@ class ProfileService extends ChangeNotifier {
     await prefs.remove(_kLast);
     await prefs.remove(_kPhone);
     await prefs.remove(_kAvatarPath);
+    // Bu qurilmadagi keyingi foydalanuvchi oldingisining bronlari, buyurtmalari,
+    // yozishmalari va daromad tarixini ko‘rmasligi uchun.
+    await ActiveBookingService.instance.clearForLogout();
+    await DriverTripService.instance.clearForLogout();
+    await ChatService.instance.clearForLogout();
+    await TripCompletionService.instance.clearForLogout();
     notifyListeners();
   }
 
@@ -255,6 +275,11 @@ class ProfileService extends ChangeNotifier {
     await prefs.setString(_kFirst, firstName);
     await prefs.setString(_kLast, lastName);
     await prefs.setString(_kPhone, phone);
+    final remoteAvatar = u.avatarPath;
+    if (avatarPath.isEmpty && remoteAvatar != null && remoteAvatar.isNotEmpty) {
+      avatarPath = remoteAvatar;
+      await prefs.setString(_kAvatarPath, remoteAvatar);
+    }
     notifyListeners();
   }
 }

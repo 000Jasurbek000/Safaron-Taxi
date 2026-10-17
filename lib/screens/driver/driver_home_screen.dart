@@ -3,7 +3,9 @@ import '../../l10n/phrase.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/app_navigation.dart';
+import '../../services/app_refresh.dart';
 import '../../services/driver_trip_service.dart';
+import '../../services/notification_service.dart';
 import '../../services/trip_cancel_service.dart';
 import '../../widgets/cancel_reason_sheet.dart';
 import '../../services/profile_service.dart';
@@ -13,6 +15,7 @@ import '../../utils/eta_util.dart';
 import '../../widgets/driver_inbox_banner.dart';
 import '../../widgets/rating_dialog.dart';
 import '../../widgets/safaron_header.dart';
+import '../notifications/notifications_screen.dart';
 
 class DriverHomeScreen extends StatelessWidget {
   const DriverHomeScreen({super.key});
@@ -27,18 +30,65 @@ class DriverHomeScreen extends StatelessWidget {
       child: SafeArea(
         bottom: false,
         child: ListenableBuilder(
-          listenable: Listenable.merge([profile, svc]),
+          listenable: Listenable.merge([profile, svc, NotificationService.instance]),
           builder: (context, _) {
-            return ListView(
+            final hasUnread = NotificationService.instance.hasUnread;
+            return RefreshIndicator(
+              color: AppColors.primary,
+              onRefresh: AppRefresh.run,
+              child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
               children: [
-                Text(
-                  tr('Assalomu alaykum,'),
-                  style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 13),
-                ),
-                Text(
-                  profile.fullName,
-                  style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 22, color: AppColors.navy),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            tr('Assalomu alaykum,'),
+                            style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 13),
+                          ),
+                          Text(
+                            profile.fullName,
+                            style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 22, color: AppColors.navy),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Material(
+                          color: AppColors.mintSoft,
+                          shape: const CircleBorder(),
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()),
+                            ),
+                            child: const SizedBox(
+                              width: 40,
+                              height: 40,
+                              child: Icon(Icons.notifications_outlined, color: AppColors.primary, size: 22),
+                            ),
+                          ),
+                        ),
+                        if (hasUnread)
+                          Positioned(
+                            right: 2,
+                            top: 2,
+                            child: Container(
+                              width: 9,
+                              height: 9,
+                              decoration: const BoxDecoration(color: AppColors.destination, shape: BoxShape.circle),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -156,7 +206,7 @@ class DriverHomeScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 6),
                             Text(o.routeLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.navy)),
-                            Text('${o.passengers} yo‘lovchi · ${o.passengerName}', style: GoogleFonts.montserrat(fontSize: 12, color: AppColors.textMuted)),
+                            Text('${o.passengers} ${tr('yo‘lovchi')} · ${o.passengerName}', style: GoogleFonts.montserrat(fontSize: 12, color: AppColors.textMuted)),
                             const SizedBox(height: 8),
                             SizedBox(
                               width: double.infinity,
@@ -196,6 +246,7 @@ class DriverHomeScreen extends StatelessWidget {
                         child: _LiveOrderCard(order: o),
                       )),
               ],
+            ),
             );
           },
         ),
@@ -221,7 +272,7 @@ class _LiveOrderCard extends StatelessWidget {
               Expanded(
                 child: Text(order.routeLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.navy)),
               ),
-              Text('${order.passengers} joy', style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, color: AppColors.primary, fontSize: 12)),
+              Text('${order.passengers} ${tr('joy')}', style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, color: AppColors.primary, fontSize: 12)),
             ],
           ),
           Text(
@@ -263,7 +314,7 @@ class _LiveOrderCard extends StatelessWidget {
                   );
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Safar yakunlandi · $stars★'), behavior: SnackBarBehavior.floating),
+                    SnackBar(content: Text('${tr('Safar yakunlandi')} · $stars★'), behavior: SnackBarBehavior.floating),
                   );
                 },
                 style: ElevatedButton.styleFrom(

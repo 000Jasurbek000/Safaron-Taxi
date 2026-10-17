@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -12,6 +11,7 @@ import '../../../services/profile_service.dart';
 import '../../../theme/app_colors.dart';
 import '../../../utils/plate_uz.dart';
 import '../../../widgets/app_ui.dart';
+import '../../../widgets/car_model_picker.dart';
 import '../../../widgets/plate_input_row.dart';
 import 'driver_application_sent_screen.dart';
 import 'driver_step_header.dart';
@@ -33,19 +33,18 @@ class _DriverVehicleInfoScreenState extends State<DriverVehicleInfoScreen> {
   late int _seats;
   String? _carPhotoPath;
   bool _submitting = false;
-
-  static const _cars = [
-    'Chevrolet Cobalt',
-    'Chevrolet Nexia',
-    'Chevrolet Spark',
-    'Chevrolet Tracker',
-    'BYD Chazor',
-  ];
+  String? _regionHint;
+  final _customCar = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _carName = _cars.contains(_profile.carName) ? _profile.carName : _cars.first;
+    final models = CarModelPicker.models();
+    _carName = models.contains(_profile.carName) ? _profile.carName : (models.first);
+    if (!models.contains(_profile.carName) && _profile.carName.isNotEmpty) {
+      _carName = kOtherCarModel;
+      _customCar.text = _profile.carName;
+    }
     _seats = _profile.seats.clamp(1, 10);
     _region.addListener(_refresh);
     _midLetter.addListener(_refresh);
@@ -63,7 +62,15 @@ class _DriverVehicleInfoScreenState extends State<DriverVehicleInfoScreen> {
     _midLetter.dispose();
     _digits.dispose();
     _endLetters.dispose();
+    _customCar.dispose();
     super.dispose();
+  }
+
+  String? _localSelfie() {
+    for (final p in [_profile.selfiePath, _profile.avatarPath]) {
+      if (p.isNotEmpty && File(p).existsSync()) return p;
+    }
+    return null;
   }
 
   Future<void> _pickCarPhoto() async {
@@ -79,12 +86,21 @@ class _DriverVehicleInfoScreenState extends State<DriverVehicleInfoScreen> {
       );
       return;
     }
-    if (!PlateUz.isValidParts(_region.text, _midLetter.text, _digits.text, _endLetters.text)) {
+    final modelName = CarModelPicker.resolve(_carName, _customCar.text);
+    if (modelName.isEmpty || modelName == kOtherCarModel) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(tr('Raqam: 80 A 567 DB yoki 80 567 DBB')),
-          behavior: SnackBarBehavior.floating,
-        ),
+        SnackBar(content: Text(tr('Moshina modelini yozing')), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+    final snapped = PlateUz.snapRegion(_region.text);
+    if (snapped.length == 2 && snapped != _region.text && PlateUz.validRegions.contains(snapped)) {
+      _region.text = snapped;
+    }
+    final plateErr = PlateUz.partsError(_region.text, _midLetter.text, _digits.text, _endLetters.text);
+    if (plateErr != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(plateErr), behavior: SnackBarBehavior.floating),
       );
       return;
     }
@@ -93,7 +109,7 @@ class _DriverVehicleInfoScreenState extends State<DriverVehicleInfoScreen> {
     );
     setState(() => _submitting = true);
     await _profile.saveVehicle(
-      carName: _carName,
+      carName: modelName,
       plate: plate,
       seats: _seats,
       hasCarPhoto: true,
@@ -103,16 +119,17 @@ class _DriverVehicleInfoScreenState extends State<DriverVehicleInfoScreen> {
     // Backendga ariza (admin panelda chiqishi uchun)
     try {
       if (AuthService.instance.registered && AuthService.instance.user != null) {
+        final selfie = _localSelfie();
         await ApiClient.instance.postMultipart(
           '/api/drivers/apply',
           fields: {
             'experience_years': '${_profile.experienceYears}',
-            'model_name': _carName,
+            'model_name': modelName,
             'plate': PlateUz.normalize(_region.text, _midLetter.text, _digits.text, _endLetters.text),
             'seats': '$_seats',
           },
           files: {
-            'selfie': _profile.selfiePath.isNotEmpty ? _profile.selfiePath : _carPhotoPath!,
+            'selfie': ?selfie,
             'vehicle_photo': _carPhotoPath!,
           },
         );
@@ -138,41 +155,6 @@ class _DriverVehicleInfoScreenState extends State<DriverVehicleInfoScreen> {
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const DriverApplicationSentScreen()),
       (route) => route.isFirst,
-    );
-  }
-
-  Widget _plateBox({
-    required TextEditingController controller,
-    required String hint,
-    required int maxLen,
-    bool letters = false,
-  }) {
-    return Expanded(
-      child: TextField(
-        controller: controller,
-        textAlign: TextAlign.center,
-        textCapitalization: TextCapitalization.characters,
-        keyboardType: letters ? TextInputType.text : TextInputType.number,
-        inputFormatters: [
-          LengthLimitingTextInputFormatter(maxLen),
-          if (letters)
-            FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z]'))
-          else
-            FilteringTextInputFormatter.digitsOnly,
-          TextInputFormatter.withFunction((old, neu) {
-            return neu.copyWith(text: neu.text.toUpperCase());
-          }),
-        ],
-        style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, letterSpacing: 1),
-        decoration: InputDecoration(
-          hintText: hint,
-          filled: true,
-          fillColor: AppColors.surface,
-          contentPadding: const EdgeInsets.symmetric(vertical: 14),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.cardBorder)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.cardBorder)),
-        ),
-      ),
     );
   }
 
@@ -217,38 +199,33 @@ class _DriverVehicleInfoScreenState extends State<DriverVehicleInfoScreen> {
                   const SizedBox(height: 16),
                   Text(tr("Moshina nomi *"), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.navy)),
                   const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.cardBorder),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _carName,
-                        isExpanded: true,
-                        items: [
-                          for (final c in _cars)
-                            DropdownMenuItem(value: c, child: Text(c, style: GoogleFonts.montserrat(fontWeight: FontWeight.w600, color: AppColors.navy))),
-                        ],
-                        onChanged: (v) {
-                          if (v != null) setState(() => _carName = v);
-                        },
-                      ),
-                    ),
+                  CarModelPicker(
+                    value: _carName,
+                    customController: _customCar,
+                    onChanged: (v) => setState(() => _carName = v),
                   ),
                   const SizedBox(height: 12),
                   Text(tr('Davlat raqami *'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.navy)),
                   const SizedBox(height: 4),
-                  Text(tr('Masalan: 80 A 567 DB yoki 80 567 DBB'), style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted)),
+                  Text(tr('Namuna: 00 A 000 AA yoki 00 000 AAA'), style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted)),
                   const SizedBox(height: 8),
                   PlateInputRow(
                     region: _region,
                     midLetter: _midLetter,
                     digits: _digits,
                     endLetters: _endLetters,
+                    onRegionCorrected: (msg) {
+                      if (!mounted) return;
+                      setState(() => _regionHint = msg);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 2)),
+                      );
+                    },
                   ),
+                  if (_regionHint != null) ...[
+                    const SizedBox(height: 6),
+                    Text(_regionHint!, style: GoogleFonts.montserrat(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primaryDark)),
+                  ],
                   const SizedBox(height: 12),
                   Text(tr("Yo'lovchilar sig'imi *"), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.navy)),
                   const SizedBox(height: 6),
@@ -279,7 +256,7 @@ class _DriverVehicleInfoScreenState extends State<DriverVehicleInfoScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: PrimaryPillButton(
-                label: _submitting ? 'Yuborilmoqda...' : tr('Davom etish'),
+                label: _submitting ? tr('Yuborilmoqda...') : tr('Davom etish'),
                 icon: null,
                 enabled: !_submitting,
                 onTap: _continue,

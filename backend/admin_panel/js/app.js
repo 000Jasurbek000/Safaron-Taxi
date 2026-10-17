@@ -108,6 +108,26 @@
     loginView.classList.remove('hidden');
   }
 
+  function sessionExpired() {
+    localStorage.removeItem('safaron_admin_token');
+    localStorage.removeItem('safaron_admin');
+    showLogin();
+    const err = document.getElementById('loginErr');
+    if (err) err.textContent = 'Sessiya tugagan. Qayta kiring.';
+  }
+  // Har qanday joyda (navigate() ichidagi try/catch bo'lmasa ham) 401
+  // kelganda darhol login ekraniga qaytarish uchun.
+  window.addEventListener('safaron:unauthorized', sessionExpired);
+
+  // Ko'plab tugma handlerlari o'z try/catch'iga ega emas — xato sodir bo'lsa
+  // tugma hech narsa qilmagandek ko'rinib, admin sababini bilmay qoladi.
+  // Shu sabab tutilmagan promise xatolarini ham ko'rsatamiz.
+  window.addEventListener('unhandledrejection', (e) => {
+    const msg = e?.reason?.message || 'Kutilmagan xatolik';
+    if (!loginView.classList.contains('hidden')) return;
+    alert(msg);
+  });
+
   async function doLogin(e) {
     if (e) e.preventDefault();
     const err = document.getElementById('loginErr');
@@ -207,11 +227,11 @@
       documents: ['Hujjatlar', 'Barcha haydovchi hujjatlari galereyasi'],
       trips: ['Safarlar', 'Tayyor e’lonlar va bandlar'],
       requests: ['Buyurtmalar', 'Yo‘lovchi so‘rovlari'],
-      locations: ['Joylar', 'Canonical locations + alias'],
-      pendingLocations: ['Joylar', 'Barcha joylar'],
+      locations: ['Joylar', 'Qishloq/mahalla nomlari, koordinata va radius'],
       notifications: ['Xabarnomalar', 'Foydalanuvchilarga xabar'],
       settings: ['Tizim sozlamalari', 'Tizim parametrlari'],
       logs: ['Loglar', 'Admin harakatlari'],
+      errors: ['Xatolar', 'Server va ilova tomonidan tutilmagan xatolar'],
       bonuses: ['Bonus tizimi', 'Kutilayotgan va tasdiqlangan bonuslar'],
       referrals: ['Referal tizimi', 'Taklif qilingan foydalanuvchilar'],
       withdrawals: ['To‘lovlar va yechimlar', 'Bonus yechish so‘rovlari'],
@@ -231,21 +251,19 @@
       else if (page === 'documents') await renderDocuments();
       else if (page === 'trips') await renderTrips();
       else if (page === 'requests') await renderRequests();
-      else if (page === 'locations' || page === 'pendingLocations') await renderLocations();
+      else if (page === 'locations') await renderLocations();
       else if (page === 'notifications') renderNotify();
       else if (page === 'settings') await renderSettings();
       else if (page === 'logs') await renderLogs();
+      else if (page === 'errors') await renderErrors();
       else if (page === 'profile') await renderProfile();
       else if (window.SafaronPlatform) await window.SafaronPlatform.render(page, content, api());
     } catch (ex) {
-      const msg = String(ex.message || '');
-      if (msg.includes('401') || msg.toLowerCase().includes('avtoriz') || msg.toLowerCase().includes('admin')) {
-        localStorage.removeItem('safaron_admin_token');
-        showLogin();
-        document.getElementById('loginErr').textContent = 'Sessiya tugagan. Qayta kiring.';
-        return;
+      // 401 bo'lsa 'safaron:unauthorized' hodisasi allaqachon login ekraniga
+      // qaytargan bo'ladi (api.js) — bu yerda faqat qolgan xatolarni ko'rsatamiz.
+      if (loginView.classList.contains('hidden')) {
+        content.innerHTML = `<p class="error">${esc(ex.message)}</p>`;
       }
-      content.innerHTML = `<p class="error">${esc(ex.message)}</p>`;
     }
   }
 
@@ -720,45 +738,156 @@
   async function renderLocations() {
     const u = UI();
     const rows = await api()('/admin/locations');
+    let editingId = null;
     content.innerHTML = u.pageLayout({
       stats: u.statRow([
         u.statCard({ label: 'Jami joylar', value: rows.length, sub: 'Ro‘yxat', tone: 'blue', icon: '⌖' }),
         u.statCard({ label: 'Tasdiqlangan', value: rows.filter((l) => l.is_approved).length, sub: 'Joriy ro‘yxat', tone: 'green', icon: '✓' }),
         u.statCard({ label: 'Koordinatali', value: rows.filter((l) => l.latitude != null).length, sub: 'GPS bor', tone: 'violet', icon: '◎' }),
-        u.statCard({ label: 'Aliasli', value: rows.filter((l) => (l.aliases || []).length).length, sub: 'Qidiruv', tone: 'orange', icon: '≡' }),
+        u.statCard({ label: 'Radiusli', value: rows.filter((l) => l.radius_m != null).length, sub: 'Avto-aniqlash', tone: 'orange', icon: '◎' }),
       ]),
-      main: (u.card('Yangi joy qo‘shish', `<div class="page-toolbar" style="margin:0">
-        <input id="locName" placeholder="Nomi" style="flex:1" />
+      main: (u.card('Joy qo‘shish / tahrirlash', `
+        <p class="muted" style="margin:4px 0 10px">Lat/Lng/Radius kiritilgan joy uchun — foydalanuvchi xaritadan shu doira ichidan nuqta tanlasa, manzil nomi avtomatik shu joy nomi bilan to‘ladi (masalan: Algabas, 1000 m). Xaritani bosib ham lat/lng ni belgilashingiz mumkin.</p>
+        <div class="page-toolbar" style="margin:0">
+        <input id="locName" placeholder="Nomi (masalan: Algabas)" style="flex:1" />
         <select id="locType"><option>village</option><option>mahalla</option><option>city</option><option>district</option><option>OFY</option><option>landmark</option><option>other</option></select>
-        <input id="locLat" placeholder="Lat" style="width:100px" />
-        <input id="locLng" placeholder="Lng" style="width:100px" />
+        <input id="locLat" placeholder="Lat (masalan: 47.5545)" style="width:140px" />
+        <input id="locLng" placeholder="Lng (masalan: 65.5616)" style="width:140px" />
+        <input id="locRadius" placeholder="Radius (metr, masalan: 1000)" style="width:170px" />
         <input id="locAliases" placeholder="Aliaslar (vergul bilan)" style="flex:1;min-width:180px" />
         <button class="btn primary" id="createLocBtn">Saqlash</button>
-      </div>`)) + u.card('Joylar ro‘yxati', u.table([
+        <button class="btn" id="cancelEditBtn" style="display:none">Bekor qilish</button>
+      </div>
+      <div id="locMap" style="height:280px;border-radius:10px;margin-top:12px;overflow:hidden"></div>
+      `)) + u.card('Joylar ro‘yxati', u.table([
         { label: 'ID', key: 'id', render: (r) => `#${r.id}` },
         { label: 'Nomi', key: 'name' },
         { label: 'Turi', key: 'type' },
         { label: 'Koordinata', key: 'latitude', render: (r) => r.latitude != null ? `${r.latitude}, ${r.longitude}` : '—' },
+        { label: 'Radius', key: 'radius_m', render: (r) => r.radius_m != null ? `${r.radius_m} m` : '—' },
         { label: 'Alias', key: 'aliases', render: (r) => u.esc((r.aliases || []).join(', ') || '—') },
         { label: 'Holat', key: 'is_approved', render: (r) => u.pill(r.is_approved ? 'APPROVED' : 'PENDING') },
+        { label: '', key: 'edit', render: (r) => `<button class="btn sm" data-edit="${r.id}">✎ Tahrirlash</button>` },
         { label: '', key: 'x', render: (r) => `<span data-loc="${r.id}" data-ok="${r.is_approved}"></span>` },
       ], rows)),
     });
+    const nameEl = document.getElementById('locName');
+    const typeEl = document.getElementById('locType');
+    const latEl = document.getElementById('locLat');
+    const lngEl = document.getElementById('locLng');
+    const radiusEl = document.getElementById('locRadius');
+    const aliasesEl = document.getElementById('locAliases');
     const createBtn = document.getElementById('createLocBtn');
+    const cancelEditBtn = document.getElementById('cancelEditBtn');
+
+    // --- Xarita: lat/lng/radius ni ko'rish va bosib belgilash uchun ---
+    const firstWithCoords = rows.find((r) => r.latitude != null && r.longitude != null);
+    const defaultCenter = firstWithCoords
+      ? [firstWithCoords.latitude, firstWithCoords.longitude]
+      : [41.6911, 60.7525];
+    const map = L.map('locMap').setView(defaultCenter, firstWithCoords ? 12 : 9);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '© OpenStreetMap',
+    }).addTo(map);
+    let marker = null;
+    let circle = null;
+
+    function syncMapFromInputs(opts) {
+      const lat = parseFloat(latEl.value);
+      const lng = parseFloat(lngEl.value);
+      const radius = parseFloat(radiusEl.value);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        if (marker) { map.removeLayer(marker); marker = null; }
+        if (circle) { map.removeLayer(circle); circle = null; }
+        return;
+      }
+      if (!marker) {
+        marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+        marker.on('dragend', () => {
+          const p = marker.getLatLng();
+          latEl.value = p.lat.toFixed(6);
+          lngEl.value = p.lng.toFixed(6);
+          syncMapFromInputs({ recenter: false });
+        });
+      } else {
+        marker.setLatLng([lat, lng]);
+      }
+      if (Number.isFinite(radius) && radius > 0) {
+        if (!circle) {
+          circle = L.circle([lat, lng], { radius, color: '#16a34a', fillOpacity: 0.12 }).addTo(map);
+        } else {
+          circle.setLatLng([lat, lng]);
+          circle.setRadius(radius);
+        }
+      } else if (circle) {
+        map.removeLayer(circle);
+        circle = null;
+      }
+      if (!opts || opts.recenter !== false) map.setView([lat, lng], Math.max(map.getZoom(), 13));
+    }
+
+    map.on('click', (e) => {
+      latEl.value = e.latlng.lat.toFixed(6);
+      lngEl.value = e.latlng.lng.toFixed(6);
+      syncMapFromInputs({ recenter: false });
+    });
+    [latEl, lngEl, radiusEl].forEach((el) => el.addEventListener('input', () => syncMapFromInputs({ recenter: false })));
+    syncMapFromInputs();
+
+    function resetForm() {
+      editingId = null;
+      nameEl.value = '';
+      typeEl.value = 'village';
+      latEl.value = '';
+      lngEl.value = '';
+      radiusEl.value = '';
+      aliasesEl.value = '';
+      createBtn.textContent = 'Saqlash';
+      cancelEditBtn.style.display = 'none';
+      syncMapFromInputs();
+    }
+
+    cancelEditBtn.onclick = resetForm;
+
     if (createBtn) {
       createBtn.onclick = async () => {
-        const name = document.getElementById('locName').value.trim();
-        const type = document.getElementById('locType').value;
-        const aliases = document.getElementById('locAliases').value.split(',').map((s) => s.trim()).filter(Boolean);
-        const latRaw = document.getElementById('locLat').value.trim();
-        const lngRaw = document.getElementById('locLng').value.trim();
+        const name = nameEl.value.trim();
+        const type = typeEl.value;
+        const aliases = aliasesEl.value.split(',').map((s) => s.trim()).filter(Boolean);
+        const latRaw = latEl.value.trim();
+        const lngRaw = lngEl.value.trim();
+        const radiusRaw = radiusEl.value.trim();
         const body = { name, type, aliases };
         if (latRaw) body.latitude = parseFloat(latRaw);
         if (lngRaw) body.longitude = parseFloat(lngRaw);
-        await api()('/admin/locations', { method: 'POST', body: JSON.stringify(body) });
+        if (radiusRaw) body.radius_m = parseFloat(radiusRaw);
+        if (editingId) {
+          await api()(`/admin/locations/${editingId}/update`, { method: 'POST', body: JSON.stringify(body) });
+        } else {
+          await api()('/admin/locations', { method: 'POST', body: JSON.stringify(body) });
+        }
         navigate('locations');
       };
     }
+    content.querySelectorAll('[data-edit]').forEach((b) => {
+      b.onclick = () => {
+        const id = b.getAttribute('data-edit');
+        const row = rows.find((r) => String(r.id) === String(id));
+        if (!row) return;
+        editingId = row.id;
+        nameEl.value = row.name || '';
+        typeEl.value = row.type || 'village';
+        latEl.value = row.latitude != null ? row.latitude : '';
+        lngEl.value = row.longitude != null ? row.longitude : '';
+        radiusEl.value = row.radius_m != null ? row.radius_m : '';
+        aliasesEl.value = (row.aliases || []).join(', ');
+        createBtn.textContent = 'Yangilash';
+        cancelEditBtn.style.display = '';
+        syncMapFromInputs();
+        nameEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      };
+    });
     content.querySelectorAll('[data-loc]').forEach((cell) => {
       if (cell.getAttribute('data-ok') === 'true') {
         cell.innerHTML = '<span class="muted">—</span>';
@@ -907,6 +1036,46 @@
         { label: 'Vaqt', key: 'created_at', render: (r) => u.dt(r.created_at) },
       ], rows)),
     });
+  }
+
+  async function renderErrors() {
+    const u = UI();
+    let source = '';
+    const draw = async () => {
+      const rows = await api()(`/admin/errors${source ? '?source=' + source : ''}`);
+      content.innerHTML = u.pageLayout({
+        stats: u.statRow([
+          u.statCard({ label: 'Jami xato', value: rows.length, sub: 'Oxirgi 200 ta', tone: 'red', icon: '⚠' }),
+          u.statCard({ label: 'Server', value: rows.filter((r) => r.source === 'server').length, sub: 'Backend', tone: 'orange', icon: '⚙' }),
+          u.statCard({ label: 'Ilova', value: rows.filter((r) => r.source === 'client').length, sub: 'Flutter', tone: 'blue', icon: '📱' }),
+        ]),
+        toolbarHtml: u.toolbar(`
+          <select id="errSource">
+            <option value="">Barchasi</option>
+            <option value="server">Server</option>
+            <option value="client">Ilova</option>
+          </select>
+          <button class="btn ghost sm" id="clearErrBtn">Tozalash</button>
+        `),
+        main: u.card('Xatolar jurnali', u.table([
+          { label: 'ID', key: 'id', render: (r) => `#${r.id}` },
+          { label: 'Manba', key: 'source', render: (r) => u.pill(r.source === 'server' ? 'SERVER' : 'ILOVA', [r.source === 'server' ? 'Server' : 'Ilova', r.source === 'server' ? 'bad' : 'warn']) },
+          { label: 'Xabar', key: 'message', render: (r) => `<span title="${u.esc(r.detail || '')}">${u.esc((r.message || '').slice(0, 120))}</span>` },
+          { label: 'Yo‘l', key: 'path', render: (r) => `<code>${u.esc(r.path || '—')}</code>` },
+          { label: 'User', key: 'user_id', render: (r) => r.user_id ? `#${r.user_id}` : '—' },
+          { label: 'Versiya', key: 'app_version', render: (r) => u.esc(r.app_version || '—') },
+          { label: 'Vaqt', key: 'created_at', render: (r) => u.dt(r.created_at) },
+        ], rows, 'Xato yo‘q — yaxshi belgi!')),
+      });
+      document.getElementById('errSource').value = source;
+      document.getElementById('errSource').onchange = (e) => { source = e.target.value; draw(); };
+      document.getElementById('clearErrBtn').onclick = async () => {
+        if (!confirm('Barcha xato yozuvlarini o‘chirasizmi?')) return;
+        await api()('/admin/errors', { method: 'DELETE' });
+        draw();
+      };
+    };
+    await draw();
   }
 
   const existing = localStorage.getItem('safaron_admin_token');

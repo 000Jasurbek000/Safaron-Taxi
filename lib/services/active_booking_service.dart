@@ -10,6 +10,7 @@ import 'place_registry_service.dart';
 import '../models/taxi_offer.dart';
 import '../screens/booking/prebook_screen.dart';
 import '../services/driver_trip_service.dart';
+import '../services/auth_service.dart';
 import '../services/profile_service.dart';
 import '../services/trip_completion_service.dart';
 import '../utils/eta_util.dart';
@@ -314,6 +315,14 @@ class ActiveBookingService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Hisobdan chiqishda — bu qurilmadagi keyingi foydalanuvchi oldingisining
+  /// faol bronlarini ko‘rmasligi uchun.
+  Future<void> clearForLogout() async {
+    bookings = [];
+    await _persist();
+    notifyListeners();
+  }
+
   Future<void> _migrateV2(SharedPreferences prefs) async {
     final raw = prefs.getString(_kLegacyV2);
     if (raw != null && raw.isNotEmpty) {
@@ -410,7 +419,7 @@ class ActiveBookingService extends ChangeNotifier {
     if (!force && hasSameRoute(taxi.from, taxi.to)) {
       return 'Bu yo‘nalishda allaqachon faol bron bor';
     }
-    final id = 'inst_${DateTime.now().millisecondsSinceEpoch}';
+    final id = 'inst_${DateTime.now().microsecondsSinceEpoch}';
     bookings = [
       ActiveBooking(
         id: id,
@@ -451,7 +460,7 @@ class ActiveBookingService extends ChangeNotifier {
     }
     final id = remoteRequestId != null
         ? 'req_$remoteRequestId'
-        : 'pre_${DateTime.now().millisecondsSinceEpoch}';
+        : 'pre_${DateTime.now().microsecondsSinceEpoch}';
     bookings = [
       ActiveBooking(
         id: id,
@@ -666,6 +675,9 @@ class ActiveBookingService extends ChangeNotifier {
         driverName: booking.taxi.driverName,
         driverRatedPassenger: driverRatedPassenger,
         passengerRatedDriver: passengerRatedDriver,
+        driverUserId: booking.taxi.driverUserId,
+        passengerUserId: AuthService.instance.user?.id,
+        remoteTripId: booking.taxi.remoteTripId,
       );
       final order = DriverTripService.instance.orderById(bookingId);
       if (order != null && order.status != PassengerOrderStatus.done) {

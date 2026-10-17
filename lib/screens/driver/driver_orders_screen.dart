@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../l10n/app_strings.dart';
 import '../../services/app_navigation.dart';
+import '../../services/app_refresh.dart';
 import '../../services/driver_trip_service.dart';
 import '../../services/trip_completion_service.dart';
 import '../../theme/app_colors.dart';
@@ -93,19 +94,30 @@ class _DriverOrdersScreenState extends State<DriverOrdersScreen> {
                 ),
                 const SizedBox(height: 10),
                 Expanded(
-                  child: shown.isEmpty
-                      ? Center(
-                          child: Text(
-                            tr('Buyurtma yo‘q'),
-                            style: GoogleFonts.montserrat(color: AppColors.textMuted, fontWeight: FontWeight.w600),
-                          ),
+                  child: RefreshIndicator(
+                    color: AppColors.primary,
+                    onRefresh: AppRefresh.run,
+                    child: shown.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: [
+                            const SizedBox(height: 80),
+                            Center(
+                              child: Text(
+                                tr('Buyurtma yo‘q'),
+                                style: GoogleFonts.montserrat(color: AppColors.textMuted, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
                         )
                       : ListView.separated(
+                          physics: const AlwaysScrollableScrollPhysics(),
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                           itemCount: shown.length,
                           separatorBuilder: (_, _) => const SizedBox(height: 10),
                           itemBuilder: (context, i) => _OrderCard(order: shown[i]),
                         ),
+                  ),
                 ),
               ],
             );
@@ -179,7 +191,7 @@ class _OrderCard extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Qabul qilindi · yo‘lovchi narxi: ${order.offeredPriceLabel}'),
+        content: Text(tr('Qabul qilindi · yo‘lovchi narxi: {price}').replaceAll('{price}', order.offeredPriceLabel)),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -285,8 +297,10 @@ class _OrderCard extends StatelessWidget {
       SnackBar(
         content: Text(
           result == order.offeredPrice
-              ? 'Qabul · ${formatSom(result)}'
-              : 'Qarshi narx: ${formatSom(result)} (yo‘lovchi: ${order.offeredPriceLabel})',
+              ? tr('Qabul · {price}').replaceAll('{price}', formatSom(result))
+              : tr('Qarshi narx: {price} (yo‘lovchi: {offered})')
+                  .replaceAll('{price}', formatSom(result))
+                  .replaceAll('{offered}', order.offeredPriceLabel),
         ),
         behavior: SnackBarBehavior.floating,
       ),
@@ -345,7 +359,7 @@ class _OrderCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(order.routeLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.navy)),
           if (order.exactPickup.isNotEmpty)
-            Text('Olib ketish: ${order.exactPickup}', style: GoogleFonts.montserrat(fontSize: 12, color: AppColors.textMuted)),
+            Text('${tr('Olib ketish')}: ${order.exactPickup}', style: GoogleFonts.montserrat(fontSize: 12, color: AppColors.textMuted)),
           if (isPre && order.dateLabel.isNotEmpty)
             Text('${order.dateLabel} · ${order.timeLabel}', style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 12, color: accent)),
           const SizedBox(height: 10),
@@ -455,7 +469,7 @@ class _OrderCard extends StatelessWidget {
                           ? () async {
                               final stars = await showTripRatingDialog(
                                 context,
-                                title: '${order.passengerName} ni baholang',
+                                title: trRateLabel(order.passengerName),
                               );
                               if (stars == null) return;
                               await DriverTripService.instance.completeOrder(
@@ -465,7 +479,7 @@ class _OrderCard extends StatelessWidget {
                               );
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Safar yakunlandi · $stars★'), behavior: SnackBarBehavior.floating),
+                                  SnackBar(content: Text('${tr('Safar yakunlandi')} · $stars★'), behavior: SnackBarBehavior.floating),
                                 );
                               }
                             }

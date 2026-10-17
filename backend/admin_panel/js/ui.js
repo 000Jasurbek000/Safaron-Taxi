@@ -1,7 +1,7 @@
 (function () {
   const COLORS = {
-    blue: '#00c853',
-    blueLight: '#e8f7ef',
+    blue: '#2563eb',
+    blueLight: '#eff6ff',
     green: '#00c853',
     greenLight: '#e8f7ef',
     orange: '#ffc107',

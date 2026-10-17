@@ -17,6 +17,7 @@ class AuthUser {
     this.driverId,
     this.isOnline,
     this.ratingAvg = 5.0,
+    this.avatarPath,
   });
 
   final int id;
@@ -31,9 +32,10 @@ class AuthUser {
   final int? driverId;
   final bool? isOnline;
   final double ratingAvg;
+  final String? avatarPath;
 
   factory AuthUser.fromJson(Map<String, dynamic> j) => AuthUser(
-        id: j['id'] as int,
+        id: (j['id'] as num?)?.toInt() ?? 0,
         phone: j['phone'] as String? ?? '',
         phoneDisplay: j['phone_display'] as String? ?? '',
         firstName: j['first_name'] as String? ?? '',
@@ -45,6 +47,7 @@ class AuthUser {
         driverId: j['driver_id'] as int?,
         isOnline: j['is_online'] as bool?,
         ratingAvg: (j['rating_avg'] as num?)?.toDouble() ?? 5.0,
+        avatarPath: j['avatar_path'] as String?,
       );
 }
 
@@ -77,10 +80,28 @@ class AuthService extends ChangeNotifier {
         if (e.statusCode == 401) {
           await logout();
         }
+      } catch (_) {
+        // Kutilmagan/noto‘g‘ri formatdagi javob — ilova ishga tushishini to‘xtatmaymiz.
       }
     }
     _loaded = true;
     notifyListeners();
+  }
+
+  Future<({bool exists, String firstName, String lastName, String fullName, String role})> lookupPhone(String phone) async {
+    try {
+      final data = await ApiClient.instance.get('/api/auth/lookup', query: {'phone': phone});
+      final map = data as Map<String, dynamic>;
+      return (
+        exists: map['exists'] == true,
+        firstName: map['first_name'] as String? ?? '',
+        lastName: map['last_name'] as String? ?? '',
+        fullName: map['full_name'] as String? ?? '',
+        role: map['active_role'] as String? ?? 'passenger',
+      );
+    } catch (_) {
+      return (exists: false, firstName: '', lastName: '', fullName: '', role: 'passenger');
+    }
   }
 
   /// SMSsiz kirish — telefon + ism + familiya.
@@ -110,9 +131,9 @@ class AuthService extends ChangeNotifier {
         return;
       }
       rethrow;
-    } catch (_) {
-      await _signInOffline(phone: phone, firstName: firstName, lastName: lastName);
     }
+    // Boshqa (kutilmagan) xatolar — masalan, serverdan noto‘g‘ri formatdagi javob —
+    // jim-jim soxta offline hisob yaratmasin, xato yuqoriga chiqsin.
   }
 
   Future<void> _signInOffline({
@@ -142,75 +163,12 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<({String message, bool userExists})> sendOtp(String phone) async {
-    try {
-      final data = await ApiClient.instance.post('/api/auth/otp/send', body: {'phone': phone});
-      final map = data as Map;
-      return (
-        message: map['message']?.toString() ?? 'SMS yuborildi',
-        userExists: map['user_exists'] == true,
-      );
-    } on ApiException catch (e) {
-      rethrow;
-    } catch (_) {
-      rethrow;
-    }
-  }
-
   bool _isConnectionError(ApiException e) {
     final m = e.message.toLowerCase();
     return m.contains('ulanib bo‘lmadi') ||
         m.contains('vaqti tugadi') ||
         m.contains('internet') ||
         e.statusCode == null && m.contains('server');
-  }
-
-  Future<void> verifyOtp({
-    required String phone,
-    required String code,
-    String? firstName,
-    String? lastName,
-  }) async {
-    try {
-      await _verifyOtpRemote(
-        phone: phone,
-        code: code,
-        firstName: firstName,
-        lastName: lastName,
-      );
-    } on ApiException {
-      rethrow;
-    }
-  }
-
-  Future<void> _verifyOtpRemote({
-    required String phone,
-    required String code,
-    String? firstName,
-    String? lastName,
-  }) async {
-    final data = await ApiClient.instance.post('/api/auth/otp/verify', body: {
-      'phone': phone,
-      'code': code,
-      if (firstName != null) 'first_name': firstName,
-      if (lastName != null) 'last_name': lastName,
-    });
-    final map = data as Map<String, dynamic>;
-    await ApiClient.instance.setToken(map['access_token'] as String);
-    user = AuthUser.fromJson(map['user'] as Map<String, dynamic>);
-    registered = true;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_kRegistered, true);
-    notifyListeners();
-  }
-
-  /// Legacy shim used by older screens.
-  Future<void> register({
-    required String name,
-    required String surname,
-    required String phone,
-  }) async {
-    await signInWithProfile(phone: phone, firstName: name, lastName: surname);
   }
 
   Future<void> setRole(String role) async {

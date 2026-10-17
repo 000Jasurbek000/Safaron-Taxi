@@ -17,6 +17,7 @@ class PlacePickerField extends StatefulWidget {
     required this.mapOpen,
     required this.onMapTap,
     this.onSelectionChanged,
+    this.showMap = true,
   });
 
   final String label;
@@ -26,6 +27,7 @@ class PlacePickerField extends StatefulWidget {
   final bool mapOpen;
   final VoidCallback onMapTap;
   final ValueChanged<PlaceSelection>? onSelectionChanged;
+  final bool showMap;
 
   @override
   State<PlacePickerField> createState() => _PlacePickerFieldState();
@@ -141,8 +143,10 @@ class _PlacePickerFieldState extends State<PlacePickerField> {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            _MapBtn(accent: widget.accent, active: widget.mapOpen, onTap: widget.onMapTap),
+            if (widget.showMap) ...[
+              const SizedBox(width: 8),
+              _MapBtn(accent: widget.accent, active: widget.mapOpen, onTap: widget.onMapTap),
+            ],
           ],
         ),
         if (showList)

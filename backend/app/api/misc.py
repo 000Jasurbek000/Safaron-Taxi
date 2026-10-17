@@ -2,11 +2,32 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, get_optional_user
 from app.models import Message, Notification, Rating, TripRequest, User, DriverProfile
-from app.schemas import MessageIn, MessageOut, NotificationOut, OkResponse, RatingIn
+from app.schemas import ClientErrorIn, MessageIn, MessageOut, NotificationOut, OkResponse, RatingIn
+from app.services.error_log import log_error
 
 router = APIRouter(tags=["misc"])
+
+
+@router.post("/client-error", response_model=OkResponse)
+def report_client_error(
+    body: ClientErrorIn,
+    user: User | None = Depends(get_optional_user),
+    db: Session = Depends(get_db),
+):
+    """Ilovada tutilmagan xato chiqsa — ko'rinishi uchun yozib qo'yamiz
+    (tashqi monitoring xizmati ulanmagan bo'lsa ham)."""
+    log_error(
+        db,
+        source="client",
+        message=body.message,
+        detail=body.detail,
+        path=body.path,
+        user_id=user.id if user else None,
+        app_version=body.app_version,
+    )
+    return OkResponse(ok=True)
 
 
 @router.get("/notifications", response_model=list[NotificationOut])

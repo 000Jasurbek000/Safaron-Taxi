@@ -135,6 +135,25 @@ class DriverApi {
   }
 }
 
+class RatingApi {
+  RatingApi._();
+  static final RatingApi instance = RatingApi._();
+
+  Future<void> rate({
+    required int toUserId,
+    required int stars,
+    int? requestId,
+    int? tripId,
+  }) async {
+    await ApiClient.instance.post('/api/ratings', body: {
+      'to_user_id': toUserId,
+      'stars': stars,
+      if (requestId != null) 'request_id': requestId,
+      if (tripId != null) 'trip_id': tripId,
+    });
+  }
+}
+
 class NotificationApi {
   NotificationApi._();
   static final NotificationApi instance = NotificationApi._();
@@ -147,5 +166,13 @@ class NotificationApi {
   Future<int> unreadCount() async {
     final data = await ApiClient.instance.get('/api/notifications/unread-count');
     return (data as Map)['count'] as int? ?? 0;
+  }
+
+  Future<void> markRead(int id) async {
+    await ApiClient.instance.post('/api/notifications/$id/read');
+  }
+
+  Future<void> markAllRead() async {
+    await ApiClient.instance.post('/api/notifications/read-all');
   }
 }

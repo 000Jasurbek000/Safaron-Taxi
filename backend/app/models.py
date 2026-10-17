@@ -145,6 +145,7 @@ class Location(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    radius_m: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_approved: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
@@ -473,3 +474,19 @@ class UserDevice(Base):
     device_id: Mapped[str] = mapped_column(String(80), index=True)
     last_role: Mapped[str] = mapped_column(String(20), default="passenger")
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class ErrorLog(Base):
+    """Ishlab chiqarishdagi xatolarni (server va ilova tomonidan) ko'rish uchun —
+    tashqi monitoring xizmati (Sentry va h.k.) ulanmagan bo'lsa ham xatolar yo'qolib ketmasin."""
+
+    __tablename__ = "error_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source: Mapped[str] = mapped_column(String(20), default="server", index=True)  # server|client
+    message: Mapped[str] = mapped_column(Text)
+    detail: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    app_version: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)

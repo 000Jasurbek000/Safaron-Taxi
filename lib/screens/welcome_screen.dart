@@ -51,7 +51,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         children: [
           Image.asset(
             'assets/images/main.png',
-            fit: BoxFit.contain,
+            fit: BoxFit.cover,
             alignment: Alignment.center,
             width: double.infinity,
             height: double.infinity,

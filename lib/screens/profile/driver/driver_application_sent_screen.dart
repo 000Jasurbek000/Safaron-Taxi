@@ -90,7 +90,7 @@ class _DriverApplicationSentScreenState extends State<DriverApplicationSentScree
               ),
               const SizedBox(height: 22),
               Text(
-                status == DriverStatus.approved ? 'Tasdiqlandingiz!' : tr('Arizangiz qabul qilindi!'),
+                status == DriverStatus.approved ? tr('Tasdiqlandingiz!') : tr('Arizangiz qabul qilindi!'),
                 textAlign: TextAlign.center,
                 style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 24, color: AppColors.navy),
               ),
@@ -108,7 +108,7 @@ class _DriverApplicationSentScreenState extends State<DriverApplicationSentScree
                 icon: _refreshing
                     ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.refresh_rounded),
-                label: Text('Yangilash', style: GoogleFonts.montserrat(fontWeight: FontWeight.w800)),
+                label: Text(tr('Yangilash'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800)),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
                   side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5)),

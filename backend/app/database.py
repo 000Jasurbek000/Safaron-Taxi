@@ -37,6 +37,7 @@ def ensure_columns() -> None:
             ("deleted_at", "TIMESTAMP"),
         ],
         "admin_logs": [("ip", "VARCHAR(64)")],
+        "locations": [("radius_m", "FLOAT")],
     }
     insp = inspect(engine)
     names = set(insp.get_table_names())

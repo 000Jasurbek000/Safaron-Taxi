@@ -114,6 +114,10 @@ class AppStrings {
     'register_title': 'Ro‘yxatdan o‘tish',
     'register_subtitle':
         'Ism, familiya va telefon raqamingiz yetarli',
+    'existing_user_banner':
+        'Bu telefon allaqachon ro‘yxatda. Eski ma’lumotlar yuklandi.',
+    'login_existing_title': 'Hisobga kirish',
+    'login_existing_btn': 'Kirish',
     'first_name': 'Ism *',
     'last_name': 'Familiya *',
     'continue_btn': 'Davom etish',
@@ -128,6 +132,12 @@ class AppStrings {
 
     'pending_application':
         'Arizangiz tekshirilmoqda. Natija bildirishnoma orqali keladi.',
+
+    'notifications_title': 'Bildirishnomalar',
+    'notifications_empty': 'Hozircha bildirishnoma yo‘q',
+    'notifications_register_hint':
+        'Bildirishnomalarni ko‘rish uchun avval ro‘yxatdan o‘ting',
+    'notifications_read_all': 'Barchasini o‘qilgan',
 
     'messages_title': 'Xabarlar',
     'messages_register_hint':
@@ -230,7 +240,7 @@ class AppStrings {
 
     'bonus_rules_title': 'Bonus shartlari',
     'bonus_rules_note':
-        'Summalar admin panelda belgilanadi. Admin o‘zgartirsa, shu yerda yangilanadi.',
+        'Do‘stingizni taklif qiling va safarlarni yakunlab bonus oling.',
 
     'bonus_history': 'Bonus tarixi',
     'withdraw_history': 'Yechib olish tarixi',
@@ -244,7 +254,7 @@ class AppStrings {
     'bonus_off': 'Bonus tizimi hozir o‘chirilgan.',
 
     'rule_passenger_first_trip':
-        'Birinchi tasdiqlangan safaringizdan keyin {amount} so‘m olasiz. Admin tasdiqlagach, balansga tushadi.',
+        'Birinchi yakunlangan safaringizdan keyin {amount} so‘m bonus olasiz.',
 
     'rule_passenger_referral':
         'Do‘stingiz sizning kodingiz bilan ro‘yxatdan o‘tib, birinchi safarini yakunlasa, sizga {amount} so‘m beriladi.',
@@ -355,6 +365,10 @@ class AppStrings {
     'register_title': 'Рўйхатдан ўтиш',
     'register_subtitle':
         'Исм, фамилия ва телефон рақамингиз етарли',
+    'existing_user_banner':
+        'Бу телефон аллақачон рўйхатда. Эски маълумотлар юкланди.',
+    'login_existing_title': 'Ҳисобга кириш',
+    'login_existing_btn': 'Кириш',
     'first_name': 'Исм *',
     'last_name': 'Фамилия *',
     'continue_btn': 'Давом этиш',
@@ -370,6 +384,12 @@ class AppStrings {
 
     'pending_application':
         'Аризангиз текширилмоқда. Натижа билдиришнома орқали келади.',
+
+    'notifications_title': 'Билдиришномалар',
+    'notifications_empty': 'Ҳозирча билдиришнома йўқ',
+    'notifications_register_hint':
+        'Билдиришномаларни кўриш учун аввал рўйхатдан ўтинг',
+    'notifications_read_all': 'Барчасини ўқилган',
 
     'messages_title': 'Хабарлар',
     'messages_register_hint':
@@ -490,7 +510,7 @@ class AppStrings {
         'Бонус шартлари',
 
     'bonus_rules_note':
-        'Суммалар админ панелида белгиланади. Админ ўзгартирса, шу ерда янгиланади.',
+        'Дўстингизни таклиф қилинг ва сафарларни якунлаб бонус олинг.',
 
     'bonus_history': 'Бонус тарихи',
     'withdraw_history': 'Ечиб олиш тарихи',
@@ -621,6 +641,10 @@ class AppStrings {
     'register_title': 'Регистрация',
     'register_subtitle':
         'Достаточно имени, фамилии и номера телефона',
+    'existing_user_banner':
+        'Этот номер уже зарегистрирован. Загружены прежние данные.',
+    'login_existing_title': 'Вход в аккаунт',
+    'login_existing_btn': 'Войти',
     'first_name': 'Имя *',
     'last_name': 'Фамилия *',
     'continue_btn': 'Продолжить',
@@ -636,6 +660,12 @@ class AppStrings {
 
     'pending_application':
         'Ваша заявка проверяется. Результат придёт уведомлением.',
+
+    'notifications_title': 'Уведомления',
+    'notifications_empty': 'Пока нет уведомлений',
+    'notifications_register_hint':
+        'Чтобы видеть уведомления, сначала зарегистрируйтесь',
+    'notifications_read_all': 'Прочитать все',
 
     'messages_title': 'Сообщения',
     'messages_register_hint':
@@ -755,7 +785,7 @@ class AppStrings {
     'bonus_rules_title': 'Условия бонуса',
 
     'bonus_rules_note':
-        'Суммы задаёт админ. Если админ изменит их, здесь они обновятся.',
+        'Пригласите друга и завершайте поездки, чтобы получить бонус.',
 
     'bonus_history': 'История бонусов',
     'withdraw_history': 'История вывода',
@@ -883,6 +913,10 @@ class AppStrings {
     'register_title': 'Тіркелу',
     'register_subtitle':
         'Аты-жөніңіз бен телефон нөміріңіз жеткілікті',
+    'existing_user_banner':
+        'Бұл телефон әлдеқашан тіркелген. Ескі деректер жүктелді.',
+    'login_existing_title': 'Аккаунтқа кіру',
+    'login_existing_btn': 'Кіру',
     'first_name': 'Аты *',
     'last_name': 'Тегі *',
     'continue_btn': 'Жалғастыру',
@@ -898,6 +932,12 @@ class AppStrings {
 
     'pending_application':
         'Өтінішіңіз тексерілуде. Нәтиже хабарлама арқылы жіберіледі.',
+
+    'notifications_title': 'Хабарландырулар',
+    'notifications_empty': 'Әзірге хабарландыру жоқ',
+    'notifications_register_hint':
+        'Хабарландыруларды көру үшін алдымен тіркеліңіз',
+    'notifications_read_all': 'Барлығын оқу',
 
     'messages_title': 'Хабарламалар',
     'messages_register_hint':
@@ -1018,7 +1058,7 @@ class AppStrings {
         'Бонус шарттары',
 
     'bonus_rules_note':
-        'Сомаларды әкімші белгілейді. Әкімші өзгерткен жағдайда, бұл жерде де жаңартылады.',
+        'Досыңызды шақырып, сапарларды аяқтап бонус алыңыз.',
 
     'bonus_history': 'Бонус тарихы',
     'withdraw_history': 'Шығару тарихы',

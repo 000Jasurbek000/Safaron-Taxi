@@ -1,5 +1,4 @@
 import 'dart:convert';
-import '../l10n/phrase.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -90,6 +89,7 @@ class PlaceRegistryService extends ChangeNotifier {
           type: item.type,
           latitude: item.latitude ?? merged[item.id]?.latitude,
           longitude: item.longitude ?? merged[item.id]?.longitude,
+          radiusM: item.radiusM ?? merged[item.id]?.radiusM,
           aliases: item.aliases,
         );
       }
@@ -103,7 +103,11 @@ class PlaceRegistryService extends ChangeNotifier {
   }
 
   /// Til va yozuvdan qat’i nazar qidirish (aliaslar bilan).
-  List<PlaceRecord> search(String query, {int limit = 8}) {
+  Future<void> refresh() async {
+    await _syncFromServer();
+  }
+
+  List<PlaceRecord> search(String query, {int limit = 40}) {
     final q = aliases.normalizePlace(query);
     if (q.isEmpty) return _places.take(limit).toList();
 
@@ -173,13 +177,18 @@ class PlaceRegistryService extends ChangeNotifier {
     return aliases.placesRelated(a, b);
   }
 
+  /// Eng yaqin joyni topadi — agar joy uchun admin radius (radiusM) belgilagan
+  /// bo‘lsa, aynan shu radius ichida bo‘lishi talab qilinadi (qishloq/mahalla
+  /// uchun aniq doira); radius belgilanmagan joylar uchun [maxKm] standart
+  /// chegara sifatida ishlatiladi.
   PlaceRecord? nearest(double lat, double lng, {double maxKm = 4}) {
     PlaceRecord? best;
-    var bestKm = maxKm;
+    double? bestKm;
     for (final p in _places) {
       if (!p.hasCoords) continue;
       final km = DistanceUtil.haversineKm(lat, lng, p.latitude!, p.longitude!);
-      if (km <= bestKm) {
+      final radiusKm = p.radiusM != null ? p.radiusM! / 1000 : maxKm;
+      if (km <= radiusKm && (bestKm == null || km < bestKm)) {
         bestKm = km;
         best = p;
       }

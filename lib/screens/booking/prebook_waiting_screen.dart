@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../data/mock_taxis.dart';
+import '../../l10n/app_strings.dart';
 import '../../models/taxi_offer.dart';
 import '../../services/active_booking_service.dart';
 import '../../services/trip_cancel_service.dart';
@@ -163,13 +164,13 @@ class _PrebookWaitingScreenState extends State<PrebookWaitingScreen>
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Text('Chiqish', style: GoogleFonts.montserrat(fontWeight: FontWeight.w800)),
+        title: Text(tr('Chiqish'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800)),
         content: Text(
-          "So'rov davom etadi. Bosh sahifa / Safarlarimda «Faol bron» orqali topasiz.",
+          tr("So'rov davom etadi. Bosh sahifa / Safarlarimda «Faol bron» orqali topasiz."),
           style: GoogleFonts.montserrat(fontSize: 13),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Yo'q")),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr("Yo'q"))),
           TextButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Ha'))),
         ],
       ),
@@ -286,7 +287,7 @@ class _PrebookWaitingScreenState extends State<PrebookWaitingScreen>
                                       Flexible(child: Text(r.to, textAlign: TextAlign.right, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 13))),
                                     ],
                                   ),
-                                  Text('Markaz (ixtiyoriy)', style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 11)),
+                                  Text(tr('Markaz (ixtiyoriy)'), style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 11)),
                                 ],
                               ),
                             ),
@@ -350,7 +351,7 @@ class _PrebookWaitingScreenState extends State<PrebookWaitingScreen>
                                 style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 13),
                               ),
                               Text(
-                                "So'rovingiz yaqin atrofdagi barcha haydovchilarga yuborildi.",
+                                AppStrings.t('waiting_broadcast'),
                                 style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 11),
                               ),
                               const SizedBox(height: 6),
@@ -380,7 +381,7 @@ class _PrebookWaitingScreenState extends State<PrebookWaitingScreen>
                           children: [
                             Text(tr('Kutilayotgan vaqt'), style: GoogleFonts.montserrat(fontSize: 9, color: AppColors.textMuted)),
                             Text(_waitLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 20, color: AppColors.primaryDark)),
-                            Text('(1 soatgacha)', style: GoogleFonts.montserrat(fontSize: 9, color: AppColors.textMuted)),
+                            Text(AppStrings.t('up_to_1_hour'), style: GoogleFonts.montserrat(fontSize: 9, color: AppColors.textMuted)),
                           ],
                         ),
                       ],
@@ -423,7 +424,7 @@ class _PrebookWaitingScreenState extends State<PrebookWaitingScreen>
                 child: ElevatedButton.icon(
                   onPressed: _cancel,
                   icon: const Icon(Icons.close_rounded, size: 18),
-                  label: Text("So'rovni bekor qilish", style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
+                  label: Text(tr("So'rovni bekor qilish"), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFFEBEE),
                     foregroundColor: AppColors.destination,

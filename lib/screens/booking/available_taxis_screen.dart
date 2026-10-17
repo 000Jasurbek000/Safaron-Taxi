@@ -7,7 +7,9 @@ import '../../models/taxi_offer.dart';
 import '../../services/auth_service.dart';
 import '../../services/location_service.dart';
 import '../../services/place_registry_service.dart';
+import '../../services/trip_catalog_service.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/smart_photo.dart';
 import '../../widgets/app_ui.dart';
 import '../../widgets/nav_actions.dart';
 import 'confirm_trip_screen.dart';
@@ -48,6 +50,7 @@ class _AvailableTaxisScreenState extends State<AvailableTaxisScreen> {
   void initState() {
     super.initState();
     LocationService.instance.start();
+    TripCatalogService.instance.refresh(from: widget.from, to: widget.to);
   }
 
   List<TaxiOffer> get _taxis => mockTaxisFor(
@@ -107,7 +110,7 @@ class _AvailableTaxisScreenState extends State<AvailableTaxisScreen> {
     );
 
     return ListenableBuilder(
-      listenable: LocationService.instance,
+      listenable: Listenable.merge([LocationService.instance, TripCatalogService.instance]),
       builder: (context, _) => Scaffold(
       backgroundColor: AppColors.surface,
       body: SafeArea(
@@ -519,12 +522,11 @@ class _TaxiCard extends StatelessWidget {
                   children: [
                     Stack(
                       children: [
-                        Image.asset(
-                          taxi.imageAsset,
+                        SmartPhoto(
+                          src: taxi.imageAsset,
+                          fallback: 'assets/images/car_cobalt.png',
                           width: 100,
                           height: 80,
-                          fit: BoxFit.cover,
-                          alignment: const Alignment(0, 0.4),
                         ),
                         if (taxi.badge != null)
                           Positioned(
@@ -681,6 +683,19 @@ class _TaxiCard extends StatelessWidget {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
+                        if (taxi.isFastResponder) ...[
+                          const SizedBox(width: 6),
+                          Icon(Icons.bolt_rounded, size: 13, color: AppColors.primary),
+                          const SizedBox(width: 1),
+                          Text(
+                            tr('tez javob beradi'),
+                            style: GoogleFonts.montserrat(
+                              color: AppColors.primary,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ],

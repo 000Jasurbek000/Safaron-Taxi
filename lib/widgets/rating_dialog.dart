@@ -5,7 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 
 /// 1–5 yulduz baho dialogi.
-Future<int?> showTripRatingDialog(BuildContext context, {String title = 'Safarni baholang'}) async {
+Future<int?> showTripRatingDialog(BuildContext context, {String? title}) async {
+  final resolvedTitle = title ?? tr('Safarni baholang');
   var stars = 5;
   return showDialog<int>(
     context: context,
@@ -15,7 +16,7 @@ Future<int?> showTripRatingDialog(BuildContext context, {String title = 'Safarni
         builder: (ctx, setState) {
           return AlertDialog(
             backgroundColor: AppColors.card,
-            title: Text(tr(title), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, color: AppColors.navy, fontSize: 17)),
+            title: Text(resolvedTitle, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, color: AppColors.navy, fontSize: 17)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -43,7 +44,7 @@ Future<int?> showTripRatingDialog(BuildContext context, {String title = 'Safarni
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, stars),
-                child: Text('Yuborish', style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, color: AppColors.primary)),
+                child: Text(tr('Yuborish'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, color: AppColors.primary)),
               ),
             ],
           );

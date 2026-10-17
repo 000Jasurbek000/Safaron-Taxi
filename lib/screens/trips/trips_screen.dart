@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../data/trip_history.dart';
 import '../../services/active_booking_service.dart';
+import '../../services/app_refresh.dart';
 import '../../services/auth_service.dart';
 import '../../services/trip_completion_service.dart';
 import '../../widgets/rating_dialog.dart';
@@ -75,7 +76,11 @@ class _TripsBody extends StatelessWidget {
     return ColoredBox(
       color: AppColors.surface,
       child: SafeArea(
-        child: ListView(
+        child: RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: AppRefresh.run,
+          child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
           children: [
             Text(
@@ -235,6 +240,7 @@ class _TripsBody extends StatelessWidget {
               ),
           ],
         ),
+        ),
       ),
     );
   }
@@ -348,7 +354,7 @@ class _ActiveTripCard extends StatelessWidget {
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              child: Text('Batafsil', style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
+              child: Text(tr('Batafsil'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
             ),
           ),
         ],
@@ -407,17 +413,17 @@ class _CompletedTripCard extends StatelessWidget {
                 onPressed: () async {
                   final stars = await showTripRatingDialog(
                     context,
-                    title: '${booking.taxi.driverName} ni baholang',
+                    title: trRateLabel(booking.taxi.driverName),
                   );
                   if (stars == null) return;
                   await TripCompletionService.instance.markPassengerRatedDriver(booking.id);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Baho yuborildi · $stars★'), behavior: SnackBarBehavior.floating),
+                      SnackBar(content: Text('${tr('Baho yuborildi')} · $stars★'), behavior: SnackBarBehavior.floating),
                     );
                   }
                 },
-                child: Text('Baholash', style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
+                child: Text(tr('Baholash'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
               ),
             ),
           ],

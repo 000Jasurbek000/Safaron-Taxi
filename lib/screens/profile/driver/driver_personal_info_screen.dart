@@ -1,14 +1,14 @@
-import 'dart:io';
 import '../../../l10n/phrase.dart';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../services/auth_service.dart';
 import '../../../services/profile_service.dart';
 import '../../../theme/app_colors.dart';
 import '../../../widgets/app_ui.dart';
+import '../../../widgets/smart_photo.dart';
 import 'driver_step_header.dart';
 import 'driver_vehicle_info_screen.dart';
 
@@ -35,8 +35,16 @@ class _DriverPersonalInfoScreenState extends State<DriverPersonalInfoScreen> {
     _last = TextEditingController(text: _profile.lastName);
     _phone = TextEditingController(text: _profile.phone);
     _experience = _profile.experienceYears;
-    _hasPhoto = _profile.hasSelfie;
-    _selfiePath = _profile.selfiePath;
+    _selfiePath = _bestPhoto();
+    _hasPhoto = _selfiePath.isNotEmpty;
+  }
+
+  String _bestPhoto() {
+    if (_profile.selfiePath.isNotEmpty) return _profile.selfiePath;
+    if (_profile.avatarPath.isNotEmpty) return _profile.avatarPath;
+    final remote = AuthService.instance.user?.avatarPath;
+    if (remote != null && remote.isNotEmpty) return remote;
+    return '';
   }
 
   @override
@@ -86,12 +94,15 @@ class _DriverPersonalInfoScreenState extends State<DriverPersonalInfoScreen> {
                         CircleAvatar(
                           radius: 52,
                           backgroundColor: AppColors.mintSoft,
-                          backgroundImage: _selfiePath.isEmpty
-                              ? null
-                              : (kIsWeb ? NetworkImage(_selfiePath) : FileImage(File(_selfiePath))) as ImageProvider,
-                          child: _selfiePath.isNotEmpty
-                              ? null
-                              : const Icon(Icons.person_rounded, size: 48, color: AppColors.primary),
+                          child: ClipOval(
+                            child: SizedBox(
+                              width: 104,
+                              height: 104,
+                              child: _selfiePath.isEmpty
+                                  ? const Icon(Icons.person_rounded, size: 48, color: AppColors.primary)
+                                  : SmartPhoto(src: _selfiePath, width: 104, height: 104, fit: BoxFit.cover),
+                            ),
+                          ),
                         ),
                         Positioned(
                           right: 0,
@@ -122,7 +133,7 @@ class _DriverPersonalInfoScreenState extends State<DriverPersonalInfoScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    tr("O'zingizning rasmingiz"),
+                    tr("O'zingizning rasmingiz (ixtiyoriy)"),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 12),
                   ),

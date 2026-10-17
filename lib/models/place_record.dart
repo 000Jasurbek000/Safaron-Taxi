@@ -6,6 +6,7 @@ class PlaceRecord {
     required this.type,
     this.latitude,
     this.longitude,
+    this.radiusM,
     this.aliases = const [],
   });
 
@@ -14,6 +15,10 @@ class PlaceRecord {
   final String type;
   final double? latitude;
   final double? longitude;
+
+  /// Admin belgilagan doira radiusi (metr) — xaritadan tanlashda shu masofa
+  /// ichidagi nuqtaga avtomatik ushbu joy nomi beriladi.
+  final double? radiusM;
   final List<String> aliases;
 
   bool get hasCoords => latitude != null && longitude != null;
@@ -26,6 +31,7 @@ class PlaceRecord {
     String? type,
     double? latitude,
     double? longitude,
+    double? radiusM,
     List<String>? aliases,
   }) {
     return PlaceRecord(
@@ -34,6 +40,7 @@ class PlaceRecord {
       type: type ?? this.type,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      radiusM: radiusM ?? this.radiusM,
       aliases: aliases ?? this.aliases,
     );
   }
@@ -44,6 +51,7 @@ class PlaceRecord {
         'type': type,
         if (latitude != null) 'latitude': latitude,
         if (longitude != null) 'longitude': longitude,
+        if (radiusM != null) 'radius_m': radiusM,
         'aliases': aliases,
       };
 
@@ -53,6 +61,7 @@ class PlaceRecord {
         type: j['type'] as String? ?? 'other',
         latitude: (j['latitude'] as num?)?.toDouble(),
         longitude: (j['longitude'] as num?)?.toDouble(),
+        radiusM: (j['radius_m'] as num?)?.toDouble(),
         aliases: (j['aliases'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       );
 

@@ -9,14 +9,14 @@ from app.models import DriverProfile, Trip, TripBooking, User, Vehicle
 from app.schemas import BookTripIn, CancelIn, OkResponse, TripCreateIn, TripOut
 from app.services.fsm import TRIP_TRANSITIONS, assert_transition
 from app.services.notify import notify
-from app.services.serializers import parse_dt, trip_out
+from app.services.serializers import compute_avg_response_secs, parse_dt, trip_out
 
 router = APIRouter(prefix="/trips", tags=["trips"])
 
 
-def _load_trip_bundle(db: Session, trip: Trip):
+def _load_trip_bundle(db: Session, trip: Trip, avg_response_sec: int | None = None):
     driver = db.query(DriverProfile).options(joinedload(DriverProfile.user), joinedload(DriverProfile.vehicle)).filter(DriverProfile.id == trip.driver_id).first()
-    return trip_out(trip, driver, driver.vehicle if driver else None, driver.user if driver else None)
+    return trip_out(trip, driver, driver.vehicle if driver else None, driver.user if driver else None, avg_response_sec)
 
 
 @router.get("", response_model=list[TripOut])
@@ -40,7 +40,8 @@ def list_ready_trips(
     if to_q:
         q = q.filter(Trip.to_text.ilike(f"%{to_q.strip()}%"))
     trips = q.order_by(Trip.scheduled_at.asc()).limit(100).all()
-    return [_load_trip_bundle(db, t) for t in trips]
+    avg_map = compute_avg_response_secs(db, [t.driver_id for t in trips])
+    return [_load_trip_bundle(db, t, avg_map.get(t.driver_id)) for t in trips]
 
 
 @router.post("", response_model=TripOut)

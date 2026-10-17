@@ -173,7 +173,7 @@ class _InlineMapPanelState extends State<InlineMapPanel> {
             Expanded(
               child: _SoftPillButton(
                 icon: _locating ? null : Icons.my_location_rounded,
-                label: _locating ? 'Aniqlanmoqda...' : 'Joylashuvim',
+                label: _locating ? tr('Aniqlanmoqda...') : tr('Joylashuvim'),
                 loading: _locating,
                 filled: false,
                 onTap: _locating ? null : _locateMe,
@@ -183,7 +183,7 @@ class _InlineMapPanelState extends State<InlineMapPanel> {
             Expanded(
               child: _SoftPillButton(
                 icon: Icons.check_rounded,
-                label: 'Tanlash',
+                label: tr('Tanlash'),
                 filled: true,
                 onTap: () => widget.onConfirm(_resolvePick()),
               ),

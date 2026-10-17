@@ -140,13 +140,13 @@ class _WaitingDriverScreenState extends State<WaitingDriverScreen>
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Text('Chiqish', style: GoogleFonts.montserrat(fontWeight: FontWeight.w800)),
+        title: Text(tr('Chiqish'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800)),
         content: Text(
-          "So'rov davom etadi. «Faol bron» orqali topasiz.",
+          tr("So'rov davom etadi. «Faol bron» orqali topasiz."),
           style: GoogleFonts.montserrat(fontSize: 13),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Yo'q")),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr("Yo'q"))),
           TextButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Ha'))),
         ],
       ),
@@ -291,8 +291,8 @@ class _WaitingDriverScreenState extends State<WaitingDriverScreen>
                     padding: const EdgeInsets.symmetric(horizontal: 32),
                     child: Text(
                       widget.taxi.isOnline
-                          ? "So'rovingiz faqat tanlangan haydovchiga yuborildi. 1 soat ichida javob kutiladi."
-                          : "Haydovchi oflayn. 1 soat kutish — keyin qayta chaqirish yoki bekor qilish mumkin.",
+                          ? tr("So'rovingiz faqat tanlangan haydovchiga yuborildi. 1 soat ichida javob kutiladi.")
+                          : tr("Haydovchi oflayn. 1 soat kutish — keyin qayta chaqirish yoki bekor qilish mumkin."),
                       textAlign: TextAlign.center,
                       style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 13, height: 1.4),
                     ),

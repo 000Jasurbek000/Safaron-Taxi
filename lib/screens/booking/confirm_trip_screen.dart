@@ -1,4 +1,3 @@
-import 'dart:io';
 import '../../l10n/phrase.dart';
 
 import 'package:flutter/material.dart';
@@ -9,6 +8,7 @@ import '../../models/taxi_offer.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/money.dart';
 import '../../widgets/app_ui.dart';
+import '../../widgets/smart_photo.dart';
 import '../../widgets/contact_actions.dart';
 import '../../widgets/nav_actions.dart';
 import '../../services/active_booking_service.dart';
@@ -91,11 +91,7 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
   bool get _needsPrice => _isOpenTrip || widget.taxi.price <= 0;
 
   Widget _carImage(TaxiOffer taxi) {
-    final src = taxi.imageAsset;
-    if (src.isNotEmpty && !src.startsWith('assets/')) {
-      return Image.file(File(src), width: 72, height: 58, fit: BoxFit.cover);
-    }
-    return Image.asset(src, width: 72, height: 58, fit: BoxFit.cover);
+    return SmartPhoto(src: taxi.imageAsset, fallback: 'assets/images/car_cobalt.png', width: 72, height: 58);
   }
 
   @override
@@ -145,7 +141,12 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                             ),
                             const SizedBox(width: 10),
                             ClipOval(
-                              child: Image.asset('assets/images/driver_avatar.png', width: 40, height: 40, fit: BoxFit.cover),
+                              child: SmartPhoto(
+                                src: taxi.driverPhoto,
+                                fallback: 'assets/images/driver_avatar.png',
+                                width: 40,
+                                height: 40,
+                              ),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
@@ -156,7 +157,7 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                                   Row(
                                     children: [
                                       const Icon(Icons.star_rounded, size: 14, color: Color(0xFFF5B301)),
-                                      Text(' ${taxi.rating} (${taxi.reviews} ta baho)', style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted)),
+                                      Text(' ${taxi.rating.toStringAsFixed(1)}', style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted)),
                                     ],
                                   ),
                                 ],
@@ -252,10 +253,10 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(taxi.from, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.navy)),
-                                Text('Qayerdan', style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 11)),
+                                Text(tr('Qayerdan'), style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 11)),
                                 const SizedBox(height: 10),
                                 Text(taxi.to, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.navy)),
-                                Text('Qayerga', style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 11)),
+                                Text(tr('Qayerga'), style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 11)),
                               ],
                             ),
                           ),
@@ -272,7 +273,7 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                               ),
                               if (_seats > 1 && _totalPrice > 0)
                                 Text(
-                                  '$_seats kishi × ${formatSom(_totalPrice ~/ _seats)}',
+                                  '$_seats ${tr('kishi')} × ${formatSom(_totalPrice ~/ _seats)}',
                                   style: GoogleFonts.montserrat(fontSize: 10, color: AppColors.textMuted),
                                 ),
                             ],
@@ -305,7 +306,7 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                             filled: true,
                             fillColor: AppColors.surface,
                             prefixIcon: Icon(Icons.location_on_rounded, color: AppColors.primary),
-                            hintText: 'Aniq manzil (masalan: 44-maktab oldi)',
+                            hintText: tr('Aniq manzil (masalan: 44-maktab oldi)'),
                             hintStyle: GoogleFonts.montserrat(fontSize: 12, color: AppColors.textMuted),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
@@ -327,7 +328,7 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("Haydovchiga qo'shimcha ma'lumot", style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.navy)),
+                        Text(tr("Haydovchiga qo'shimcha ma'lumot"), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.navy)),
                         TextField(
                           controller: _note,
                           maxLength: 100,
@@ -349,7 +350,7 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Taklif narxingiz (1 kishi)', style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 14)),
+                          Text(tr('Taklif narxingiz (1 kishi)'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 14)),
                           TextField(
                             controller: _offeredPrice,
                             keyboardType: TextInputType.number,
@@ -363,7 +364,7 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                           ),
                           if (_seats > 1 && _totalPrice > 0)
                             Text(
-                              'Jami: ${_totalPriceLabel}',
+                              '${tr('Jami narx:')} $_totalPriceLabel',
                               style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.primaryDark),
                             ),
                         ],
@@ -400,7 +401,7 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                               ),
                             ),
                             Text(
-                              'Maks. ${taxi.seats} joy',
+                              '${tr('Maks.')} ${taxi.seats} ${tr('joy')}',
                               style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 12, color: AppColors.primary),
                             ),
                           ],
@@ -411,11 +412,11 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                             children: [
                               Icon(Icons.payments_outlined, size: 16, color: AppColors.primary),
                               const SizedBox(width: 6),
-                              Text('Jami narx: ', style: GoogleFonts.montserrat(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
+                              Text('${tr('Jami narx:')} ', style: GoogleFonts.montserrat(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
                               Text(_totalPriceLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.primary)),
                               if (_seats > 1)
                                 Text(
-                                  '  · $_seats kishi',
+                                  '  · $_seats ${tr('kishi')}',
                                   style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted),
                                 ),
                             ],
@@ -448,7 +449,7 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                     final offered = _offeredUnitPrice;
                     if (offered == null || offered < 1000) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Taklif narxini kiriting (kamida 1000)'), behavior: SnackBarBehavior.floating),
+                        SnackBar(content: Text(tr('Taklif narxini kiriting (kamida 1000)')), behavior: SnackBarBehavior.floating),
                       );
                       return;
                     }

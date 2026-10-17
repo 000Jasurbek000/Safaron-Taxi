@@ -76,7 +76,7 @@ class DriverFoundScreen extends StatelessWidget {
                 children: [
                   SuccessCheckHero(
                     title: tr('Haydovchi topildi!'),
-                    subtitle: "Haydovchi sizning so'rovingizni qabul qildi.",
+                    subtitle: tr("Haydovchi sizning so'rovingizni qabul qildi."),
                   ),
                   const SizedBox(height: 16),
                   DriverVehicleCard(taxi: taxi, showTelegram: false),
@@ -85,13 +85,13 @@ class DriverFoundScreen extends StatelessWidget {
                     fromLabel: request.from,
                     fromSub: request.exactPlace,
                     toLabel: request.to,
-                    toSub: 'Markaz',
+                    toSub: tr('Markaz'),
                   ),
                   const SizedBox(height: 12),
                   SoftMetaCard(
                     dateTime: '${request.dateLabel}\n${request.timeLabel}',
-                    passengers: '${request.passengers} kishi',
-                    luggage: request.hasLuggage ? tr('Bagaj bor') : "Bagaj yo'q",
+                    passengers: '${request.passengers} ${tr('kishi')}',
+                    luggage: request.hasLuggage ? tr('Bagaj bor') : tr("Bagaj yo'q"),
                     price: taxi.priceLabel,
                   ),
                   const SizedBox(height: 10),
@@ -116,7 +116,7 @@ class DriverFoundScreen extends StatelessWidget {
                   TripTimelineBar(
                     activeIndex: 1,
                     steps: [
-                      (label: "So'rov yuborildi", time: '09:32', icon: Icons.check_rounded),
+                      (label: tr("So'rov yuborildi"), time: '09:32', icon: Icons.check_rounded),
                       (label: tr('Haydovchi topildi'), time: '09:35', icon: Icons.local_taxi_rounded),
                       (label: tr('Safar boshlanishi'), time: request.timeLabel, icon: Icons.schedule_rounded),
                       (label: tr('Safar yakunlandi'), time: '—', icon: Icons.flag_outlined),
@@ -144,7 +144,7 @@ class DriverFoundScreen extends StatelessWidget {
                       color: const Color(0xFFE8EEF5),
                       fg: AppColors.navy,
                       icon: Icons.refresh_rounded,
-                      label: 'Boshqa',
+                      label: tr('Boshqa'),
                       onTap: () => _askAnother(context),
                     ),
                   ),
@@ -155,7 +155,7 @@ class DriverFoundScreen extends StatelessWidget {
                       color: AppColors.primary,
                       fg: Colors.white,
                       icon: Icons.check_rounded,
-                      label: 'Tasdiqlash',
+                      label: tr('Tasdiqlash'),
                       filled: true,
                       onTap: () async {
                         try {

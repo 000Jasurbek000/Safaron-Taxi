@@ -83,9 +83,9 @@ class DriverTripsArchiveScreen extends StatelessWidget {
                     final record = TripCompletionService.instance.byBookingId(o.broadcastGroupId ?? o.id);
                     final needsRating = record?.needsDriverRating ?? false;
                     final statusLabel = switch (o.status) {
-                      PassengerOrderStatus.done => 'Tugallangan',
+                      PassengerOrderStatus.done => tr('Tugallangan'),
                       PassengerOrderStatus.cancelled => tr('Bekor qilingan'),
-                      PassengerOrderStatus.expired => 'Yopilgan',
+                      PassengerOrderStatus.expired => tr('Yopilgan'),
                       _ => o.status.name,
                     };
 
@@ -124,17 +124,17 @@ class DriverTripsArchiveScreen extends StatelessWidget {
                                   onPressed: () async {
                                     final stars = await showTripRatingDialog(
                                       context,
-                                      title: '${o.passengerName} ni baholang',
+                                      title: trRateLabel(o.passengerName),
                                     );
                                     if (stars == null) return;
                                     await TripCompletionService.instance.markDriverRatedPassenger(o.id);
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('Baho yuborildi · $stars★'), behavior: SnackBarBehavior.floating),
+                                        SnackBar(content: Text('${tr('Baho yuborildi')} · $stars★'), behavior: SnackBarBehavior.floating),
                                       );
                                     }
                                   },
-                                  child: Text('Baholash', style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
+                                  child: Text(tr('Baholash'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
                                 ),
                               ),
                             ],

@@ -28,6 +28,11 @@
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      if (res.status === 401) {
+        // Token eskirgan/haqiqiy emas — qaysi tugma bosilganidan qat'i nazar
+        // (hatto try/catch'siz chaqiruvlarda ham) login ekraniga qaytaramiz.
+        window.dispatchEvent(new CustomEvent('safaron:unauthorized'));
+      }
       throw new Error(formatDetail(data.detail) || ('Xatolik ' + res.status));
     }
     return data;
