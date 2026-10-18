@@ -140,6 +140,7 @@ class TripOut(BaseModel):
     driver_phone: str = ""
     driver_photo: Optional[str] = None
     driver_avg_response_sec: Optional[int] = None
+    driver_is_online: bool = False
     car_model: str = ""
     plate: str = ""
     car_photo: Optional[str] = None

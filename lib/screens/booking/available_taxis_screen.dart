@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../l10n/phrase.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -45,12 +47,24 @@ class AvailableTaxisScreen extends StatefulWidget {
 class _AvailableTaxisScreenState extends State<AvailableTaxisScreen> {
   int _dateMode = 0; // 0 bugun, 1 ertaga, 2 oldindan
   TimeOfDayFilter _timeFilter = TimeOfDayFilter.all;
+  Timer? _autoRefresh;
 
   @override
   void initState() {
     super.initState();
     LocationService.instance.start();
     TripCatalogService.instance.refresh(from: widget.from, to: widget.to);
+    // Haydovchi oflayn/onlayn holatini va safarlar ro'yxatini yangilab turish
+    // uchun — aks holda ekran ochiq turganda holat eskirib qoladi.
+    _autoRefresh = Timer.periodic(const Duration(seconds: 20), (_) {
+      TripCatalogService.instance.refresh(from: widget.from, to: widget.to);
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoRefresh?.cancel();
+    super.dispose();
   }
 
   List<TaxiOffer> get _taxis => mockTaxisFor(

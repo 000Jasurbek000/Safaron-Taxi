@@ -9,9 +9,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'place_registry_service.dart';
 import '../models/taxi_offer.dart';
 import '../screens/booking/prebook_screen.dart';
+import '../services/api_client.dart';
 import '../services/driver_trip_service.dart';
 import '../services/auth_service.dart';
 import '../services/profile_service.dart';
+import '../services/safaron_api.dart';
 import '../services/trip_completion_service.dart';
 import '../utils/eta_util.dart';
 
@@ -418,6 +420,17 @@ class ActiveBookingService extends ChangeNotifier {
   }) async {
     if (!force && hasSameRoute(taxi.from, taxi.to)) {
       return 'Bu yo‘nalishda allaqachon faol bron bor';
+    }
+    // Haydovchi serverda e'lon qilgan safar — joy bandligini serverga
+    // yuboramiz, aks holda haydovchi boshqa qurilmada bundan bexabar qoladi.
+    if (taxi.remoteTripId != null) {
+      try {
+        await TripApi.instance.book(taxi.remoteTripId!, seats: seats);
+      } on ApiException catch (e) {
+        return e.message;
+      } catch (_) {
+        return tr('Internet aloqasi yo‘q yoki server javob bermadi. Qayta urinib ko‘ring.');
+      }
     }
     final id = 'inst_${DateTime.now().microsecondsSinceEpoch}';
     bookings = [

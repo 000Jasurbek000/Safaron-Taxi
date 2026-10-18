@@ -55,7 +55,7 @@ class TripCatalogService extends ChangeNotifier {
       driverPhoto: driverPhoto,
       driverUserId: j['driver_user_id'] as int?,
       period: TimeOfDayFilter.all,
-      isOnline: true,
+      isOnline: j['driver_is_online'] as bool? ?? false,
       avgResponseSec: j['driver_avg_response_sec'] as int?,
     );
   }

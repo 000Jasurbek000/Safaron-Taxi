@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../l10n/phrase.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -27,6 +29,7 @@ class TaxisScreen extends StatefulWidget {
 class _TaxisScreenState extends State<TaxisScreen> {
   OnlineFilter _filter = OnlineFilter.all;
   final _search = TextEditingController();
+  Timer? _autoRefresh;
 
   @override
   void initState() {
@@ -34,10 +37,16 @@ class _TaxisScreenState extends State<TaxisScreen> {
     _search.addListener(() => setState(() {}));
     LocationService.instance.start();
     TripCatalogService.instance.refresh();
+    // Haydovchi oflayn/onlayn holatini va safarlar ro'yxatini yangilab turish
+    // uchun — aks holda ekran ochiq turganda holat eskirib qoladi.
+    _autoRefresh = Timer.periodic(const Duration(seconds: 20), (_) {
+      TripCatalogService.instance.refresh();
+    });
   }
 
   @override
   void dispose() {
+    _autoRefresh?.cancel();
     _search.dispose();
     super.dispose();
   }

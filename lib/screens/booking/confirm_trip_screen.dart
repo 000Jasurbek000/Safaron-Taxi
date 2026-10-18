@@ -39,6 +39,7 @@ class ConfirmTripScreen extends StatefulWidget {
 class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
   late int _seats;
   late final bool _isOpenTrip;
+  bool _confirming = false;
   final _note = TextEditingController();
   final _offeredPrice = TextEditingController();
   late final TextEditingController _pickup;
@@ -432,50 +433,58 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: PrimaryPillButton(
                 label: tr('Safarni tasdiqlash'),
-                onTap: () async {
-                  var bookTaxi = taxi;
-                  if (_isOpenTrip) {
-                    final from = _from.text.trim();
-                    final to = _to.text.trim();
-                    if (from.isEmpty || to.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(tr('Qayerdan va qayerga manzilni kiriting')), behavior: SnackBarBehavior.floating),
-                      );
-                      return;
-                    }
-                    bookTaxi = taxi.copyWith(from: from, to: to);
-                  }
-                  if (_needsPrice) {
-                    final offered = _offeredUnitPrice;
-                    if (offered == null || offered < 1000) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(tr('Taklif narxini kiriting (kamida 1000)')), behavior: SnackBarBehavior.floating),
-                      );
-                      return;
-                    }
-                    bookTaxi = bookTaxi.copyWith(price: _totalPrice);
-                  } else if (bookTaxi.price > 0) {
-                    bookTaxi = bookTaxi.copyWith(price: _totalPrice);
-                  }
+                loading: _confirming,
+                onTap: _confirming
+                    ? null
+                    : () async {
+                        var bookTaxi = taxi;
+                        if (_isOpenTrip) {
+                          final from = _from.text.trim();
+                          final to = _to.text.trim();
+                          if (from.isEmpty || to.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(tr('Qayerdan va qayerga manzilni kiriting')), behavior: SnackBarBehavior.floating),
+                            );
+                            return;
+                          }
+                          bookTaxi = taxi.copyWith(from: from, to: to);
+                        }
+                        if (_needsPrice) {
+                          final offered = _offeredUnitPrice;
+                          if (offered == null || offered < 1000) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(tr('Taklif narxini kiriting (kamida 1000)')), behavior: SnackBarBehavior.floating),
+                            );
+                            return;
+                          }
+                          bookTaxi = bookTaxi.copyWith(price: _totalPrice);
+                        } else if (bookTaxi.price > 0) {
+                          bookTaxi = bookTaxi.copyWith(price: _totalPrice);
+                        }
 
-                  var forceDuplicate = false;
-                  if (ActiveBookingService.instance.hasSameRoute(bookTaxi.from, bookTaxi.to)) {
-                    forceDuplicate = await showDuplicateRouteDialog(context);
-                    if (!forceDuplicate || !context.mounted) return;
-                  }
+                        setState(() => _confirming = true);
+                        var forceDuplicate = false;
+                        if (ActiveBookingService.instance.hasSameRoute(bookTaxi.from, bookTaxi.to)) {
+                          forceDuplicate = await showDuplicateRouteDialog(context);
+                          if (!forceDuplicate || !context.mounted) {
+                            setState(() => _confirming = false);
+                            return;
+                          }
+                        }
 
-                  if (!context.mounted) return;
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => WaitingDriverScreen(
-                        taxi: bookTaxi,
-                        seats: _seats,
-                        exactPickup: _pickup.text.trim(),
-                        forceInstant: forceDuplicate,
-                      ),
-                    ),
-                  );
-                },
+                        if (!context.mounted) return;
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => WaitingDriverScreen(
+                              taxi: bookTaxi,
+                              seats: _seats,
+                              exactPickup: _pickup.text.trim(),
+                              forceInstant: forceDuplicate,
+                            ),
+                          ),
+                        );
+                        if (mounted) setState(() => _confirming = false);
+                      },
               ),
             ),
             const BottomHomeBar(),

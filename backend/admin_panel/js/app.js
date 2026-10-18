@@ -608,7 +608,7 @@
             from_text: modalRoot.querySelector('#editReqFrom').value.trim(),
             to_text: modalRoot.querySelector('#editReqTo').value.trim(),
             exact_place: modalRoot.querySelector('#editReqExact').value.trim(),
-            scheduled_at: new Date(modalRoot.querySelector('#editReqWhen').value).toISOString(),
+            scheduled_at: modalRoot.querySelector('#editReqWhen').value,
             passengers_count: Number(modalRoot.querySelector('#editReqCount').value),
             offered_price: Number(modalRoot.querySelector('#editReqPrice').value),
             note: modalRoot.querySelector('#editReqNote').value.trim(),
@@ -672,7 +672,7 @@
           body: JSON.stringify({
             from_text: modalRoot.querySelector('#editTripFrom').value.trim(),
             to_text: modalRoot.querySelector('#editTripTo').value.trim(),
-            scheduled_at: new Date(modalRoot.querySelector('#editTripWhen').value).toISOString(),
+            scheduled_at: modalRoot.querySelector('#editTripWhen').value,
             seats_total: Number(modalRoot.querySelector('#editTripSeats').value),
             price: Number(modalRoot.querySelector('#editTripPrice').value),
             note: modalRoot.querySelector('#editTripNote').value.trim(),

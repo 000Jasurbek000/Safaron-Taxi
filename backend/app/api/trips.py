@@ -34,6 +34,7 @@ def list_ready_trips(
             Trip.status.in_(["OPEN", "FULL"]),
             Trip.seats_available > 0,
             DriverProfile.status == "APPROVED",
+            DriverProfile.is_online.is_(True),
             User.deleted_at.is_(None),
         )
     )
@@ -97,6 +98,9 @@ def book_trip(trip_id: int, body: BookTripIn, user: User = Depends(get_current_u
         raise HTTPException(404, "Safar topilmadi.")
     if trip.status != "OPEN":
         raise HTTPException(400, "Bu safarga joy band qilib bo‘lmaydi.")
+    driver_check = db.get(DriverProfile, trip.driver_id)
+    if not driver_check or not driver_check.is_online:
+        raise HTTPException(400, "Haydovchi hozir oflayn — bu safarga joy band qilib bo‘lmaydi.")
     if trip.scheduled_at < datetime.utcnow():
         trip.status = "EXPIRED"
         db.commit()

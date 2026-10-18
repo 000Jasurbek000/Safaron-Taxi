@@ -71,6 +71,7 @@ def trip_out(
         driver_phone=u.phone if u else "",
         driver_photo=(d.photo_path if d else None) or (u.avatar_path if u else None),
         driver_avg_response_sec=avg_response_sec,
+        driver_is_online=bool(d.is_online) if d else False,
         car_model=v.model_name if v else "",
         plate=v.plate if v else "",
         car_photo=v.photo_path if v else None,

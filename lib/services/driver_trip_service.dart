@@ -288,7 +288,7 @@ class DriverTripService extends ChangeNotifier {
   static const _kTrips = 'safaron_driver_trips';
   static const _kOnline = 'safaron_driver_online';
   static const orderTimeout = Duration(hours: 1);
-  static const defaultRouteMinutes = 30;
+  static const defaultRouteMinutes = 20;
   static const inactiveTimeout = Duration(hours: 5);
   /// Yo‘lovchi olingandan keyin haydovchi "Safarni yakunlash"ni unutib qoysa —
   /// shu vaqtdan so‘ng safar avtomatik (muvaffaqiyatli) yakunlanadi.
@@ -937,16 +937,18 @@ class DriverTripService extends ChangeNotifier {
       final sameDir = _routeSame(tf, tt, f, t);
       final opposite = _routeSame(tf, tt, t, f);
       if (sameDir) {
+        final mins = now.difference(trip.createdAt).inMinutes;
         final blockUntil = trip.createdAt.add(Duration(minutes: defaultRouteMinutes * 2));
         if (now.isBefore(blockUntil)) {
-          return 'Bu yo‘nalishda ${defaultRouteMinutes * 2} daqiqa kutish kerak (borish+qaytish). '
-              '${blockUntil.hour.toString().padLeft(2, '0')}:${blockUntil.minute.toString().padLeft(2, '0')} dan keyin e’lon qiling.';
+          return 'Siz $mins daqiqa oldin shu manzilga safar e’lon qilgansiz, hali bu safar yakunlanmadi. '
+              '${blockUntil.hour.toString().padLeft(2, '0')}:${blockUntil.minute.toString().padLeft(2, '0')} dan keyin qayta e’lon qiling.';
         }
       } else if (opposite) {
+        final mins = now.difference(trip.createdAt).inMinutes;
         final blockUntil = trip.createdAt.add(Duration(minutes: defaultRouteMinutes));
         if (now.isBefore(blockUntil)) {
-          return 'Qarama-qarshi yo‘nalish uchun ${defaultRouteMinutes} daqiqa kuting '
-              '(${blockUntil.hour.toString().padLeft(2, '0')}:${blockUntil.minute.toString().padLeft(2, '0')}).';
+          return 'Siz $mins daqiqa oldin qarama-qarshi yo‘nalishga safar e’lon qilgansiz, hali bu safar yakunlanmadi. '
+              '${blockUntil.hour.toString().padLeft(2, '0')}:${blockUntil.minute.toString().padLeft(2, '0')} dan keyin qayta e’lon qiling.';
         }
       }
     }
@@ -977,14 +979,13 @@ class DriverTripService extends ChangeNotifier {
       scheduled = DateTime.now().add(const Duration(minutes: 1));
     }
     var id = 'dt_${DateTime.now().microsecondsSinceEpoch}';
-    Object? remoteError;
+    final fromText = from.trim().isEmpty ? 'Ochiq' : from.trim();
+    final toText = to.trim().isEmpty ? 'Yo‘nalish ochiq' : to.trim();
     try {
-      final fromText = from.trim().isEmpty ? 'Ochiq' : from.trim();
-      final toText = to.trim().isEmpty ? 'Yo‘nalish ochiq' : to.trim();
       final remote = await TripApi.instance.create({
         'from_text': fromText,
         'to_text': toText == fromText ? '$toText (qaytish)' : toText,
-        'scheduled_at': scheduled.toUtc().toIso8601String(),
+        'scheduled_at': scheduled.toIso8601String(),
         'seats_total': seats.clamp(1, 15),
         'price': price < 0 ? 0 : price,
         if (toAliases.isNotEmpty) 'to_note': toAliases.join(', '),
@@ -992,9 +993,15 @@ class DriverTripService extends ChangeNotifier {
       final remoteId = remote['id'];
       if (remoteId != null) id = 'dt_$remoteId';
     } on ApiException catch (e) {
-      remoteError = e;
-    } catch (e) {
-      remoteError = e;
+      // Server haqiqiy xatolik qaytardi (masalan, 20 daqiqa cheklovi) —
+      // mahalliy nusxa yaratilmaydi, aniq sabab bilan to‘xtatiladi.
+      throw StateError(e.message);
+    } catch (_) {
+      // Internet yo‘q yoki server javob bermadi — soxta "muvaffaqiyat"
+      // ko‘rsatib, mahalliy nusxa yaratish o‘rniga aniq xato beramiz, aks
+      // holda foydalanuvchi bir necha marta bosib, internet qaytganda
+      // bir nechta takroriy safar e’lon qilinib qolishi mumkin edi.
+      throw StateError('Internet aloqasi yo‘q yoki server javob bermadi. Qayta urinib ko‘ring.');
     }
     final trip = DriverPublishedTrip(
       id: id,
@@ -1011,9 +1018,6 @@ class DriverTripService extends ChangeNotifier {
     myTrips = [trip, ...myTrips];
     await _persistTrips();
     notifyListeners();
-    if (remoteError is ApiException && remoteError.statusCode != null) {
-      throw StateError(remoteError.message);
-    }
   }
 
   Future<void> deactivateTrip(String id) async {

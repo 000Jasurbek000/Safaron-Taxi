@@ -34,21 +34,26 @@ class PrimaryPillButton extends StatelessWidget {
     required this.onTap,
     this.icon = Icons.arrow_forward_rounded,
     this.enabled = true,
+    this.loading = false,
   });
 
   final String label;
   final VoidCallback? onTap;
   final IconData? icon;
   final bool enabled;
+  /// Tasdiqlanayotganda tugma o‘chiriladi va aylanuvchi indikator chiqadi —
+  /// shu bilan bir necha marta bosib takroriy yuborishning oldi olinadi.
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
+    final isEnabled = enabled && !loading;
     return Opacity(
-      opacity: enabled ? 1 : 0.5,
+      opacity: isEnabled ? 1 : 0.5,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: enabled ? onTap : null,
+          onTap: isEnabled ? onTap : null,
           borderRadius: BorderRadius.circular(28),
           child: Ink(
             height: 54,
@@ -68,6 +73,17 @@ class PrimaryPillButton extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                if (loading) ...[
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.onPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
                 Text(
                   label,
                   style: GoogleFonts.montserrat(
@@ -76,7 +92,7 @@ class PrimaryPillButton extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                if (icon != null) ...[
+                if (!loading && icon != null) ...[
                   const SizedBox(width: 8),
                   Icon(icon, color: AppColors.onPrimary, size: 20),
                 ],

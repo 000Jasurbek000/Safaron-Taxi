@@ -26,10 +26,10 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
   final _to = TextEditingController();
   final _extra = TextEditingController();
   final _price = TextEditingController();
-  final _minAutoAccept = TextEditingController();
   late int _seats;
   DateTime _date = DateTime.now();
   TimeOfDay _time = TimeOfDay.now();
+  bool _submitting = false;
 
   @override
   void initState() {
@@ -43,7 +43,6 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
     _to.dispose();
     _extra.dispose();
     _price.dispose();
-    _minAutoAccept.dispose();
     super.dispose();
   }
 
@@ -75,6 +74,7 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
   }
 
   Future<void> _submit() async {
+    if (_submitting) return;
     final from = PlaceRegistryService.instance.canonicalName(_from.text.trim());
     final to = PlaceRegistryService.instance.canonicalName(_to.text.trim());
     final priceRaw = _price.text.trim();
@@ -90,8 +90,8 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .toList();
-    final minAutoAccept = parseSomInput(_minAutoAccept.text.trim());
 
+    setState(() => _submitting = true);
     try {
       await DriverTripService.instance.publishTrip(
         from: from,
@@ -101,11 +101,11 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
         dateLabel: _dateLabel,
         seats: _seats,
         price: price ?? 0,
-        minAutoAcceptPrice: (price ?? 0) <= 0 ? minAutoAccept : null,
         scheduledAt: DateTime(_date.year, _date.month, _date.day, _time.hour, _time.minute),
       );
     } on StateError catch (e) {
       if (!mounted) return;
+      setState(() => _submitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message), behavior: SnackBarBehavior.floating),
       );
@@ -124,8 +124,7 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
     _to.clear();
     _extra.clear();
     _price.clear();
-    _minAutoAccept.clear();
-    setState(() {});
+    setState(() => _submitting = false);
   }
 
   @override
@@ -303,42 +302,6 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
                           ),
                           style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 22, color: AppColors.primaryDark),
                         ),
-                        AnimatedBuilder(
-                          animation: _price,
-                          builder: (context, _) {
-                            if (parseSomInput(_price.text) != null && (parseSomInput(_price.text) ?? 0) > 0) {
-                              return const SizedBox.shrink();
-                            }
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const SizedBox(height: 12),
-                                Divider(height: 1, color: AppColors.cardBorder),
-                                const SizedBox(height: 10),
-                                Text(tr('Minimal avtomatik qabul narxi (ixtiyoriy)'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 13)),
-                                Text(
-                                  tr('Yo‘lovchi shundan yuqori narx yuborsa, so‘rov darhol (siz kutmasdan) qabul qilinadi.'),
-                                  style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted, height: 1.3),
-                                ),
-                                const SizedBox(height: 6),
-                                TextField(
-                                  controller: _minAutoAccept,
-                                  keyboardType: TextInputType.number,
-                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                  decoration: InputDecoration(
-                                    border: InputBorder.none,
-                                    isDense: true,
-                                    hintText: tr('Masalan: 20000'),
-                                    hintStyle: GoogleFonts.montserrat(color: AppColors.textMuted),
-                                    suffixText: tr("so'm"),
-                                    suffixStyle: GoogleFonts.montserrat(fontWeight: FontWeight.w700, color: AppColors.primaryDark),
-                                  ),
-                                  style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.primaryDark),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
                       ],
                     ),
                   ),
@@ -350,8 +313,9 @@ class _DriverCreateTripScreenState extends State<DriverCreateTripScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: PrimaryPillButton(
-                label: tr('Safarni e’lon qilish'),
+                label: _submitting ? tr('Yuklanmoqda...') : tr('Safarni e’lon qilish'),
                 icon: Icons.publish_rounded,
+                loading: _submitting,
                 onTap: _submit,
               ),
             ),
