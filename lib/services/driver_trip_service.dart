@@ -299,6 +299,7 @@ class DriverTripService extends ChangeNotifier {
   List<PassengerOrder> orders = [];
   List<DriverPublishedTrip> myTrips = [];
   Timer? _expiryTimer;
+  Timer? _heartbeatTimer;
   String? _lastPassengerNotice;
   String? _lastDriverNotice;
 
@@ -425,12 +426,20 @@ class DriverTripService extends ChangeNotifier {
     _loaded = true;
     _armExpiryTimer();
     await _expireStaleOrders();
+    if (isOnline) {
+      // Ilova qayta ochilganda server bilan holatni qayta sinxronlaymiz —
+      // aks holda oldingi sessiyadan beri server hali oflayn deb bilishi mumkin.
+      DriverApi.instance.setOnline(true).catchError((_) {});
+      _syncHeartbeat();
+    }
     notifyListeners();
   }
 
   /// Hisobdan chiqishda — bu qurilmadagi keyingi foydalanuvchi oldingisining
   /// buyurtmalari/safarlarini ko‘rmasligi uchun.
   Future<void> clearForLogout() async {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
     orders = [];
     myTrips = [];
     await _persistOrders();
@@ -575,11 +584,27 @@ class DriverTripService extends ChangeNotifier {
     }).toList();
   }
 
+  /// Haydovchi "Onlayn/Oflayn" tugmasini bosganda — mahalliy holatni
+  /// o'zgartirish bilan birga serverga ham yuboradi, aks holda yo'lovchilar
+  /// uni hamon oflayn deb ko'radi (server ko'rinishi mahalliy UI dan mustaqil).
   Future<void> setOnline(bool value) async {
+    await DriverApi.instance.setOnline(value);
     isOnline = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kOnline, value);
+    _syncHeartbeat();
     notifyListeners();
+  }
+
+  /// Onlayn bo'lgan vaqtda serverga davriy signal yuborib, "faolligi tugagan"
+  /// deb avtomatik oflaynga o'tkazilib qolinmasligi uchun.
+  void _syncHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    if (!isOnline) return;
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+      DriverApi.instance.heartbeat().catchError((_) {});
+    });
   }
 
   Future<void> addPassengerOrder(PassengerOrder order) async {

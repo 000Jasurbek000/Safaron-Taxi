@@ -151,7 +151,19 @@ class DriverHomeScreen extends StatelessWidget {
                       Switch(
                         value: svc.isOnline,
                         activeThumbColor: AppColors.primary,
-                        onChanged: (v) => svc.setOnline(v),
+                        onChanged: (v) async {
+                          try {
+                            await svc.setOnline(v);
+                          } catch (_) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(tr('Holatni yangilab bo‘lmadi — internetni tekshirib, qayta urinib ko‘ring.')),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        },
                       ),
                     ],
                   ),
