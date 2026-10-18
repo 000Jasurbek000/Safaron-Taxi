@@ -23,6 +23,7 @@ class AppRefresh {
       _ok(ActiveBookingService.instance.load()),
       _ok(ChatService.instance.load()),
       _ok(DriverTripService.instance.load()),
+      _ok(DriverTripService.instance.syncFromServer()),
       _ok(_auth()),
     ]);
   }

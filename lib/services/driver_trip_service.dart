@@ -1029,6 +1029,37 @@ class DriverTripService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Serverdagi haqiqiy band qilishlarni (boshqa qurilmadan tasdiqlangan
+  /// bo‘lsa ham) mahalliy ro‘yxatga tortadi — joy soni va faollik holatini
+  /// yangilaydi.
+  Future<void> syncFromServer() async {
+    try {
+      final remoteTrips = await TripApi.instance.mine();
+      final byRemoteId = <int, Map<String, dynamic>>{
+        for (final t in remoteTrips)
+          if (t['id'] != null) t['id'] as int: t,
+      };
+      myTrips = [
+        for (final t in myTrips)
+          if (t.id.startsWith('dt_') && int.tryParse(t.id.substring(3)) != null)
+            () {
+              final remote = byRemoteId[int.parse(t.id.substring(3))];
+              if (remote == null) return t;
+              final seatsAvailable = remote['seats_available'] as int? ?? t.seats;
+              final status = remote['status'] as String? ?? '';
+              final stillActive = status == 'OPEN' || status == 'FULL';
+              return t.copyWith(seats: seatsAvailable, active: stillActive);
+            }()
+          else
+            t,
+      ];
+      await _persistTrips();
+      notifyListeners();
+    } catch (_) {
+      // Internet yo‘q — mahalliy ro‘yxat o‘zgarishsiz qoladi.
+    }
+  }
+
   Future<void> _persistOrders() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kOrders, jsonEncode(orders.map((e) => e.toJson()).toList()));
