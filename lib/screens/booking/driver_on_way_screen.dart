@@ -133,12 +133,18 @@ class _DriverOnWayScreenState extends State<DriverOnWayScreen> {
         );
       }
     }
-    await ActiveBookingService.instance.complete(
+    final err = await ActiveBookingService.instance.complete(
       id,
       completedBy: TripCompletedBy.passenger,
       passengerRatedDriver: true,
     );
     if (!mounted) return;
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Safar yakunlandi · $stars★'), behavior: SnackBarBehavior.floating),
     );

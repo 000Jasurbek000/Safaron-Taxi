@@ -24,6 +24,7 @@ class AppRefresh {
       _ok(ChatService.instance.load()),
       _ok(DriverTripService.instance.load()),
       _ok(DriverTripService.instance.syncFromServer()),
+      _ok(DriverTripService.instance.pollInbox()),
       _ok(_auth()),
     ]);
   }

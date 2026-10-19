@@ -38,6 +38,13 @@ def ensure_columns() -> None:
         ],
         "admin_logs": [("ip", "VARCHAR(64)")],
         "locations": [("radius_m", "FLOAT")],
+        "trip_bookings": [
+            ("agreed_price", "INTEGER"),
+            ("eta_minutes", "INTEGER"),
+            ("eta_arrive_at", "TIMESTAMP"),
+            ("picked_up_at", "TIMESTAMP"),
+            ("expires_at", "TIMESTAMP"),
+        ],
     }
     insp = inspect(engine)
     names = set(insp.get_table_names())

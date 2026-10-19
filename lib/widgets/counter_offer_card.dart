@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../services/active_booking_service.dart';
 import '../services/driver_exclusion_service.dart';
-import '../services/driver_trip_service.dart';
 import '../services/trip_cancel_service.dart';
 import '../theme/app_colors.dart';
 import '../utils/money.dart';
@@ -29,14 +28,18 @@ class CounterOfferCard extends StatelessWidget {
   final VoidCallback? onRejected;
 
   Future<void> _accept(BuildContext context) async {
-    await DriverTripService.instance.passengerConfirmCounter(bookingId);
-    await ActiveBookingService.instance.setStatus(BookingStatus.confirmed, bookingId: bookingId);
-    onConfirmed?.call();
-    if (context.mounted) {
+    final err = await ActiveBookingService.instance.confirmCounterOffer(bookingId);
+    if (!context.mounted) return;
+    if (err != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('Narx tasdiqlandi')), behavior: SnackBarBehavior.floating),
+        SnackBar(content: Text(err), behavior: SnackBarBehavior.floating),
       );
+      return;
     }
+    onConfirmed?.call();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(tr('Narx tasdiqlandi')), behavior: SnackBarBehavior.floating),
+    );
   }
 
   Future<void> _reject(BuildContext context) async {

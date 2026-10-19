@@ -300,8 +300,14 @@ class DriverTripService extends ChangeNotifier {
   List<DriverPublishedTrip> myTrips = [];
   Timer? _expiryTimer;
   Timer? _heartbeatTimer;
+  Timer? _inboxPollTimer;
   String? _lastPassengerNotice;
   String? _lastDriverNotice;
+
+  int? _remoteBookingId(String orderId) {
+    if (!orderId.startsWith('inst_')) return null;
+    return int.tryParse(orderId.substring(5));
+  }
 
   String? get lastPassengerNotice => _lastPassengerNotice;
   String? get lastDriverNotice => _lastDriverNotice;
@@ -399,38 +405,46 @@ class DriverTripService extends ChangeNotifier {
   }
 
   Future<void> load() async {
-    if (_loaded) return;
-    final prefs = await SharedPreferences.getInstance();
-    isOnline = prefs.getBool(_kOnline) ?? true;
+    if (!_loaded) {
+      final prefs = await SharedPreferences.getInstance();
+      isOnline = prefs.getBool(_kOnline) ?? true;
 
-    final ordersRaw = prefs.getString(_kOrders);
-    if (ordersRaw != null && ordersRaw.isNotEmpty) {
-      try {
-        final list = (jsonDecode(ordersRaw) as List).cast<Map<String, dynamic>>();
-        orders = list.map(PassengerOrder.fromJson).toList();
-      } catch (_) {
-        orders = [];
+      final ordersRaw = prefs.getString(_kOrders);
+      if (ordersRaw != null && ordersRaw.isNotEmpty) {
+        try {
+          final list = (jsonDecode(ordersRaw) as List).cast<Map<String, dynamic>>();
+          orders = list.map(PassengerOrder.fromJson).toList();
+        } catch (_) {
+          orders = [];
+        }
       }
-    }
 
-    final tripsRaw = prefs.getString(_kTrips);
-    if (tripsRaw != null && tripsRaw.isNotEmpty) {
-      try {
-        final list = (jsonDecode(tripsRaw) as List).cast<Map<String, dynamic>>();
-        myTrips = list.map(DriverPublishedTrip.fromJson).toList();
-      } catch (_) {
-        myTrips = [];
+      final tripsRaw = prefs.getString(_kTrips);
+      if (tripsRaw != null && tripsRaw.isNotEmpty) {
+        try {
+          final list = (jsonDecode(tripsRaw) as List).cast<Map<String, dynamic>>();
+          myTrips = list.map(DriverPublishedTrip.fromJson).toList();
+        } catch (_) {
+          myTrips = [];
+        }
       }
-    }
 
-    _loaded = true;
-    _armExpiryTimer();
-    await _expireStaleOrders();
+      _loaded = true;
+      _armExpiryTimer();
+      await _expireStaleOrders();
+    }
     if (isOnline) {
-      // Ilova qayta ochilganda server bilan holatni qayta sinxronlaymiz —
-      // aks holda oldingi sessiyadan beri server hali oflayn deb bilishi mumkin.
+      // Bu qism _loaded qo'riqlovidan tashqarida qasddan — ilk urinish ilova
+      // ochilishida tarmoq/autentifikatsiya hali tayyor bo'lmay muvaffaqiyatsiz
+      // bo'lsa, oldin bu hech qachon qayta urinilmasdi va server haydovchini
+      // abadiy "oflayn" deb bilib, e'lonlari hech kimga (hatto o'ziga ham)
+      // ko'rinmay qolardi — Onlayn/Oflayn tugmasini qo'lda bosmaguncha. Endi
+      // har bir AppRefresh.run() (pastga tortib yangilash) chaqirig'ida ham
+      // qayta uriniladi.
+      // ignore: unawaited_futures
       DriverApi.instance.setOnline(true).catchError((_) {});
       _syncHeartbeat();
+      _armInboxPoll();
     }
     notifyListeners();
   }
@@ -440,6 +454,8 @@ class DriverTripService extends ChangeNotifier {
   Future<void> clearForLogout() async {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
+    _inboxPollTimer?.cancel();
+    _inboxPollTimer = null;
     orders = [];
     myTrips = [];
     await _persistOrders();
@@ -594,6 +610,7 @@ class DriverTripService extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kOnline, value);
     _syncHeartbeat();
+    _armInboxPoll();
     notifyListeners();
   }
 
@@ -606,6 +623,72 @@ class DriverTripService extends ChangeNotifier {
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 45), (_) {
       DriverApi.instance.heartbeat().catchError((_) {});
     });
+  }
+
+  /// Boshqa qurilmadagi yo'lovchilarning so'rovlarini serverdan tortib,
+  /// mahalliy "Kelgan buyurtmalar" ro'yxatiga qo'shadi — aks holda haydovchi
+  /// faqat shu qurilmada yaratilgan (mahalliy push) so'rovlarnigina ko'rardi.
+  void _armInboxPoll() {
+    _inboxPollTimer?.cancel();
+    _inboxPollTimer = null;
+    if (!isOnline) return;
+    _inboxPollTimer = Timer.periodic(const Duration(seconds: 7), (_) {
+      // ignore: unawaited_futures
+      pollInbox();
+    });
+  }
+
+  Future<void> pollInbox() async {
+    if (!AuthService.instance.registered) return;
+    try {
+      final rows = await TripApi.instance.bookingsInbox();
+      for (final row in rows) {
+        await addPassengerOrder(_orderFromServerRow(row));
+      }
+    } catch (_) {
+      // Internet yo'q yoki server javob bermadi — mahalliy ro'yxat o'zgarishsiz qoladi.
+    }
+  }
+
+  PassengerOrderStatus _mapServerBookingStatus(String s) => switch (s) {
+        'PENDING' => PassengerOrderStatus.open,
+        'COUNTERED' => PassengerOrderStatus.counterOffered,
+        'CONFIRMED' => PassengerOrderStatus.accepted,
+        'DRIVER_ON_WAY' => PassengerOrderStatus.onWay,
+        'PASSENGER_PICKED' => PassengerOrderStatus.pickedUp,
+        'COMPLETED' => PassengerOrderStatus.done,
+        _ => PassengerOrderStatus.cancelled,
+      };
+
+  /// Server booking qatorini mahalliy `PassengerOrder`ga aylantiradi.
+  /// `targetTaxiId` atayin `'dt_<tripId>'` ko'rinishida — haydovchining o'zi
+  /// e'lon qilganda ishlatgan sxema bilan bir xil, aks holda `_isForMe()`
+  /// mos kelmay, so'rov hech kimga ko'rinmay qoladi.
+  PassengerOrder _orderFromServerRow(Map<String, dynamic> row) {
+    final trip = row['trip'] as Map<String, dynamic>;
+    final etaArrive = row['eta_arrive_at'] as String?;
+    final pickedUpAt = row['picked_up_at'] as String?;
+    final expiresAt = row['expires_at'] as String?;
+    final name = row['passenger_name'] as String?;
+    return PassengerOrder(
+      id: 'inst_${row['id']}',
+      kind: PassengerOrderKind.instant,
+      from: trip['from_text'] as String? ?? '',
+      to: trip['to_text'] as String? ?? '',
+      passengers: row['seats'] as int? ?? 1,
+      createdAt: DateTime.tryParse(row['created_at'] as String? ?? '') ?? DateTime.now(),
+      offeredPrice: trip['price'] as int? ?? 0,
+      agreedPrice: row['agreed_price'] as int?,
+      passengerName: (name != null && name.isNotEmpty) ? name : tr('Yo‘lovchi'),
+      passengerPhone: row['passenger_phone'] as String? ?? '',
+      status: _mapServerBookingStatus(row['status'] as String? ?? 'PENDING'),
+      driverEtaMinutes: row['eta_minutes'] as int?,
+      etaArriveAt: etaArrive == null ? null : DateTime.tryParse(etaArrive),
+      pickedUp: pickedUpAt != null,
+      pickedUpAt: pickedUpAt == null ? null : DateTime.tryParse(pickedUpAt),
+      targetTaxiId: 'dt_${trip['id']}',
+      expiresAt: expiresAt == null ? null : DateTime.tryParse(expiresAt),
+    );
   }
 
   Future<void> addPassengerOrder(PassengerOrder order) async {
@@ -631,12 +714,32 @@ class DriverTripService extends ChangeNotifier {
     await acceptOrder(order.id);
   }
 
-  Future<void> acceptOrder(String id, {int? driverPrice, int? etaMinutes}) async {
+  /// Natija: muvaffaqiyatda `null`, serverdan xato kelsa foydalanuvchiga
+  /// ko‘rsatiladigan xabar matni (masalan, joy boshqa so‘rovga berib
+  /// yuborilgan bo‘lsa).
+  Future<String?> acceptOrder(String id, {int? driverPrice, int? etaMinutes}) async {
     final order = orderById(id);
-    if (order == null) return;
+    if (order == null) return null;
 
     final agreed = driverPrice ?? order.offeredPrice;
     final isCounter = agreed != order.offeredPrice;
+
+    final remoteId = _remoteBookingId(id);
+    if (remoteId != null) {
+      try {
+        await TripApi.instance.respondBooking(
+          remoteId,
+          action: 'accept',
+          offeredPrice: isCounter ? agreed : null,
+          etaMinutes: etaMinutes,
+        );
+      } on ApiException catch (e) {
+        return e.message;
+      } catch (_) {
+        return tr('Internet aloqasi yo‘q yoki server javob bermadi. Qayta urinib ko‘ring.');
+      }
+    }
+
     final newStatus = isCounter ? PassengerOrderStatus.counterOffered : PassengerOrderStatus.accepted;
 
     orders = [
@@ -695,6 +798,7 @@ class DriverTripService extends ChangeNotifier {
     }
 
     notifyListeners();
+    return null;
   }
 
   /// Safar sig‘imidan qabul qilingan yo‘lovchi o‘rindiqlarini ayiradi —
@@ -780,17 +884,30 @@ class DriverTripService extends ChangeNotifier {
   }
 
   /// Ochiq so‘rovni rad etish — faqat shu haydovchi nusxasi (broadcast).
-  Future<void> rejectOpenOrder(String orderId, {required String reason}) async {
+  /// Natija: muvaffaqiyatda `null`, serverdan xato kelsa xabar matni.
+  Future<String?> rejectOpenOrder(String orderId, {required String reason}) async {
     final order = orderById(orderId);
-    if (order == null) return;
+    if (order == null) return null;
     if (order.status != PassengerOrderStatus.open) {
       await cancelAllForBooking(
         order.broadcastGroupId ?? orderId,
         cancelledBy: 'driver',
         reason: reason,
       );
-      return;
+      return null;
     }
+
+    final remoteId = _remoteBookingId(orderId);
+    if (remoteId != null) {
+      try {
+        await TripApi.instance.respondBooking(remoteId, action: 'reject', message: reason);
+      } on ApiException catch (e) {
+        return e.message;
+      } catch (_) {
+        return tr('Internet aloqasi yo‘q yoki server javob bermadi. Qayta urinib ko‘ring.');
+      }
+    }
+
     if (order.broadcastGroupId != null) {
       orders = [
         for (final o in orders)
@@ -809,6 +926,7 @@ class DriverTripService extends ChangeNotifier {
     }
     await _persistOrders();
     notifyListeners();
+    return null;
   }
 
   /// Yo‘lovchi haydovchini tanlaganda — qolgan haydovchilardan olib tashlash.
@@ -869,7 +987,18 @@ class DriverTripService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> markPassengerPickedUp(String id) async {
+  /// Natija: muvaffaqiyatda `null`, serverdan xato kelsa xabar matni.
+  Future<String?> markPassengerPickedUp(String id) async {
+    final remoteId = _remoteBookingId(id);
+    if (remoteId != null) {
+      try {
+        await TripApi.instance.advanceBookingStatus(remoteId, 'PASSENGER_PICKED');
+      } on ApiException catch (e) {
+        return e.message;
+      } catch (_) {
+        return tr('Internet aloqasi yo‘q yoki server javob bermadi. Qayta urinib ko‘ring.');
+      }
+    }
     orders = [
       for (final o in orders)
         if (o.id == id)
@@ -880,6 +1009,7 @@ class DriverTripService extends ChangeNotifier {
     await _persistOrders();
     await ActiveBookingService.instance.markPickedUp(id);
     notifyListeners();
+    return null;
   }
 
   Future<void> cancelOrder(String id) async {
@@ -914,13 +1044,24 @@ class DriverTripService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> completeOrder(
+  /// Natija: muvaffaqiyatda `null`, serverdan xato kelsa xabar matni.
+  Future<String?> completeOrder(
     String id, {
     TripCompletedBy completedBy = TripCompletedBy.driver,
     bool driverRatedPassenger = false,
     bool passengerRatedDriver = false,
   }) async {
     final order = orderById(id);
+    final remoteId = _remoteBookingId(id);
+    if (remoteId != null) {
+      try {
+        await TripApi.instance.advanceBookingStatus(remoteId, 'COMPLETED');
+      } on ApiException catch (e) {
+        return e.message;
+      } catch (_) {
+        return tr('Internet aloqasi yo‘q yoki server javob bermadi. Qayta urinib ko‘ring.');
+      }
+    }
     await markOrderDone(id);
     await ActiveBookingService.instance.markBookingCompleted(id);
     if (order != null) {
@@ -939,6 +1080,7 @@ class DriverTripService extends ChangeNotifier {
       );
     }
     notifyListeners();
+    return null;
   }
 
   /// Eng ko‘p e’lon qilingan yo‘nalishlar (top 3).

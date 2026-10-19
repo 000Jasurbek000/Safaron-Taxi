@@ -35,6 +35,20 @@ TRIP_TRANSITIONS: dict[str, set[str]] = {
     "EXPIRED": set(),
 }
 
+# Tayyor safarga joy band qilish (instant booking) — bitta haydovchi, select
+# bosqichisiz, shuning uchun REQUEST_TRANSITIONS'dan soddaroq.
+TRIP_BOOKING_TRANSITIONS: dict[str, set[str]] = {
+    "PENDING": {"COUNTERED", "CONFIRMED", "DRIVER_ON_WAY", "REJECTED", "CANCELLED", "EXPIRED"},
+    "COUNTERED": {"CONFIRMED", "DRIVER_ON_WAY", "CANCELLED", "EXPIRED"},
+    "CONFIRMED": {"DRIVER_ON_WAY", "PASSENGER_PICKED", "CANCELLED"},
+    "DRIVER_ON_WAY": {"PASSENGER_PICKED", "CANCELLED"},
+    "PASSENGER_PICKED": {"COMPLETED", "CANCELLED"},
+    "COMPLETED": set(),
+    "REJECTED": set(),
+    "CANCELLED": set(),
+    "EXPIRED": set(),
+}
+
 
 def can_transition(table: dict[str, set[str]], current: str, new: str) -> bool:
     return new in table.get(current, set())

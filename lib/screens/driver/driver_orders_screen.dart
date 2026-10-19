@@ -171,10 +171,10 @@ class _OrderCard extends StatelessWidget {
   }
 
   Future<void> _rejectOrder(BuildContext context) async {
-    await DriverTripService.instance.rejectOpenOrder(order.id, reason: tr('Haydovchi rad etdi'));
+    final err = await DriverTripService.instance.rejectOpenOrder(order.id, reason: tr('Haydovchi rad etdi'));
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(tr('So‘rov rad etildi')), behavior: SnackBarBehavior.floating),
+      SnackBar(content: Text(err ?? tr('So‘rov rad etildi')), behavior: SnackBarBehavior.floating),
     );
   }
 
@@ -187,11 +187,11 @@ class _OrderCard extends StatelessWidget {
     if (order.kind != PassengerOrderKind.prebook && EtaUtil.untilDeparture(order.timeLabel) == null && eta == null) {
       return; // dialog cancelled
     }
-    await DriverTripService.instance.acceptOrder(order.id, etaMinutes: eta);
+    final err = await DriverTripService.instance.acceptOrder(order.id, etaMinutes: eta);
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(tr('Qabul qilindi · yo‘lovchi narxi: {price}').replaceAll('{price}', order.offeredPriceLabel)),
+        content: Text(err ?? tr('Qabul qilindi · yo‘lovchi narxi: {price}').replaceAll('{price}', order.offeredPriceLabel)),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -291,16 +291,17 @@ class _OrderCard extends StatelessWidget {
     if (order.kind != PassengerOrderKind.prebook && EtaUtil.untilDeparture(order.timeLabel) == null && eta == null) {
       return;
     }
-    await DriverTripService.instance.acceptOrder(order.id, driverPrice: result, etaMinutes: eta);
+    final err = await DriverTripService.instance.acceptOrder(order.id, driverPrice: result, etaMinutes: eta);
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          result == order.offeredPrice
-              ? tr('Qabul · {price}').replaceAll('{price}', formatSom(result))
-              : tr('Qarshi narx: {price} (yo‘lovchi: {offered})')
-                  .replaceAll('{price}', formatSom(result))
-                  .replaceAll('{offered}', order.offeredPriceLabel),
+          err ??
+              (result == order.offeredPrice
+                  ? tr('Qabul · {price}').replaceAll('{price}', formatSom(result))
+                  : tr('Qarshi narx: {price} (yo‘lovchi: {offered})')
+                      .replaceAll('{price}', formatSom(result))
+                      .replaceAll('{offered}', order.offeredPriceLabel)),
         ),
         behavior: SnackBarBehavior.floating,
       ),
@@ -472,18 +473,28 @@ class _OrderCard extends StatelessWidget {
                                 title: trRateLabel(order.passengerName),
                               );
                               if (stars == null) return;
-                              await DriverTripService.instance.completeOrder(
+                              final err = await DriverTripService.instance.completeOrder(
                                 order.id,
                                 completedBy: TripCompletedBy.driver,
                                 driverRatedPassenger: true,
                               );
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('${tr('Safar yakunlandi')} · $stars★'), behavior: SnackBarBehavior.floating),
+                                  SnackBar(
+                                    content: Text(err ?? '${tr('Safar yakunlandi')} · $stars★'),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
                                 );
                               }
                             }
-                          : () => DriverTripService.instance.markPassengerPickedUp(order.id),
+                          : () async {
+                              final err = await DriverTripService.instance.markPassengerPickedUp(order.id);
+                              if (err != null && context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(err), behavior: SnackBarBehavior.floating),
+                                );
+                              }
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,

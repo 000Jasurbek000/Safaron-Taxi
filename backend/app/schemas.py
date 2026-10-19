@@ -160,6 +160,26 @@ class BookTripIn(BaseModel):
     note: Optional[str] = None
 
 
+class TripBookingOut(BaseModel):
+    id: int
+    trip_id: int
+    passenger_id: int
+    seats: int
+    status: str
+    agreed_price: Optional[int] = None
+    eta_minutes: Optional[int] = None
+    eta_arrive_at: Optional[datetime] = None
+    picked_up_at: Optional[datetime] = None
+    cancelled_by: Optional[str] = None
+    cancel_reason: Optional[str] = None
+    created_at: datetime
+    expires_at: Optional[datetime] = None
+    trip: TripOut
+    passenger_name: str = ""
+    passenger_phone: str = ""
+    passenger_rating: float = 5.0
+
+
 class RequestCreateIn(BaseModel):
     from_location_id: Optional[int] = None
     to_location_id: Optional[int] = None
@@ -177,6 +197,7 @@ class DriverRespondIn(BaseModel):
     action: str  # accept|reject
     offered_price: Optional[int] = Field(default=None, ge=1000)
     message: Optional[str] = None
+    eta_minutes: Optional[int] = Field(default=None, ge=1, le=300)
 
 
 class SelectDriverIn(BaseModel):

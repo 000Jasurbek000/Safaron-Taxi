@@ -18,7 +18,7 @@ class TripCatalogService extends ChangeNotifier {
     notifyListeners();
     try {
       final rows = await TripApi.instance.listReady(from: from, to: to);
-      remote = rows.map(_fromApi).toList();
+      remote = rows.map(fromApi).toList();
       error = null;
     } on ApiException catch (e) {
       error = e.message;
@@ -29,7 +29,10 @@ class TripCatalogService extends ChangeNotifier {
     notifyListeners();
   }
 
-  TaxiOffer _fromApi(Map<String, dynamic> j) {
+  /// Server `trip` JSON'ini `TaxiOffer`ga aylantiradi — band qilish oqimida
+  /// (`active_booking_service.dart`, `driver_trip_service.dart`) ham shu
+  /// xaritalash qayta ishlatiladi, shuning uchun public/static.
+  static TaxiOffer fromApi(Map<String, dynamic> j) {
     final photo = (j['car_photo'] as String?) ?? '';
     final driverPhoto = (j['driver_photo'] as String?) ?? '';
     final scheduled = DateTime.tryParse(j['scheduled_at']?.toString() ?? '');

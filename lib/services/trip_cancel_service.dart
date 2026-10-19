@@ -14,7 +14,31 @@ class TripCancelService {
     if (bookingId.startsWith('req_')) {
       return int.tryParse(bookingId.substring(4));
     }
+    if (bookingId.startsWith('inst_')) {
+      return int.tryParse(bookingId.substring(5));
+    }
     return null;
+  }
+
+  /// `req_` (oldindan bron — TripRequest) va `inst_` (hozirgi band qilish —
+  /// TripBooking) turli backend endpointlariga ega, shuning uchun prefiksga
+  /// qarab tarqatiladi.
+  Future<void> _cancelRemote(String bookingId, String reason) async {
+    if (bookingId.startsWith('req_')) {
+      final remote = _remoteId(bookingId);
+      if (remote != null) {
+        try {
+          await RequestApi.instance.cancel(remote, reason);
+        } catch (_) {}
+      }
+    } else if (bookingId.startsWith('inst_')) {
+      final remote = _remoteId(bookingId);
+      if (remote != null) {
+        try {
+          await TripApi.instance.cancelBooking(remote, reason);
+        } catch (_) {}
+      }
+    }
   }
 
   String _resolveBookingId(String bookingId, PassengerOrder? order) {
@@ -40,12 +64,7 @@ class TripCancelService {
     }
     final groupId = _resolveBookingId(bookingId, order);
 
-    final remote = _remoteId(groupId);
-    if (remote != null) {
-      try {
-        await RequestApi.instance.cancel(remote, reason);
-      } catch (_) {}
-    }
+    await _cancelRemote(groupId, reason);
 
     await DriverTripService.instance.cancelAllForBooking(
       groupId,
@@ -91,12 +110,7 @@ class TripCancelService {
       return;
     }
 
-    final remote = _remoteId(groupId);
-    if (remote != null) {
-      try {
-        await RequestApi.instance.cancel(remote, reason);
-      } catch (_) {}
-    }
+    await _cancelRemote(groupId, reason);
 
     await DriverTripService.instance.cancelAllForBooking(
       groupId,

@@ -14,6 +14,7 @@ import '../services/driver_trip_service.dart';
 import '../services/auth_service.dart';
 import '../services/profile_service.dart';
 import '../services/safaron_api.dart';
+import '../services/trip_catalog_service.dart';
 import '../services/trip_completion_service.dart';
 import '../utils/eta_util.dart';
 
@@ -373,15 +374,130 @@ class ActiveBookingService extends ChangeNotifier {
     await prefs.setString(_kKey, jsonEncode(bookings.map((e) => e.toJson()).toList()));
   }
 
+  Timer? _fastPollTimer;
+
   void _armTick() {
     _tickTimer?.cancel();
     _tickTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       // ignore: unawaited_futures
       _expireInactiveInstant();
+      // ignore: unawaited_futures
+      _pollRemoteBookings(const {
+        BookingStatus.confirmed,
+        BookingStatus.onWay,
+        BookingStatus.pickedUp,
+      });
       if (bookings.any((b) => b.status == BookingStatus.onWay && b.etaArriveAt != null)) {
         notifyListeners();
       }
     });
+    // Haydovchi javobi kutilayotgan bosqichlar — eng yuqori e'tibor paytida
+    // tezroq (prebook_waiting_screen'dagi 3s poll bilan bir xil ruhda).
+    _fastPollTimer?.cancel();
+    _fastPollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      // ignore: unawaited_futures
+      _pollRemoteBookings(const {BookingStatus.waiting, BookingStatus.counterOffer});
+    });
+  }
+
+  int? _parseRemoteBookingId(String bookingId) {
+    if (!bookingId.startsWith('inst_')) return null;
+    return int.tryParse(bookingId.substring(5));
+  }
+
+  // Faqat instant (BookingKind.instant) bronlarga qo'llanadi — driverFound
+  // faqat prebook oqimida ishlatiladi, bu yerda to'liqlik uchun kiritilgan.
+  int _statusRank(BookingStatus s) => switch (s) {
+        BookingStatus.waiting => 0,
+        BookingStatus.driverFound => 1,
+        BookingStatus.counterOffer => 1,
+        BookingStatus.confirmed => 2,
+        BookingStatus.onWay => 3,
+        BookingStatus.pickedUp => 4,
+        BookingStatus.completed => 5,
+        BookingStatus.expired => 5,
+        BookingStatus.cancelled => 5,
+      };
+
+  /// Haydovchi boshqa qurilmada javob bergan bo‘lsa — server holatini
+  /// mahalliyga ko‘chiradi, mavjud setterlar orqali (ekranlar o‘zgarmaydi).
+  Future<void> _pollRemoteBookings(Set<BookingStatus> statuses) async {
+    final targets = bookings
+        .where((b) => b.kind == BookingKind.instant && b.isActive && statuses.contains(b.status))
+        .toList();
+    for (final b in targets) {
+      final remoteId = _parseRemoteBookingId(b.id);
+      if (remoteId == null) continue;
+      try {
+        final row = await TripApi.instance.getBooking(remoteId);
+        await _applyServerBookingRow(b, row);
+      } catch (_) {
+        // Internet yo'q yoki vaqtinchalik xato — keyingi urinishda davom etadi.
+      }
+    }
+  }
+
+  Future<void> _applyServerBookingRow(ActiveBooking b, Map<String, dynamic> row) async {
+    final status = row['status'] as String? ?? '';
+    if (status == 'REJECTED' || status == 'EXPIRED') {
+      if (b.isActive) {
+        await markExpired(
+          b.id,
+          message: status == 'REJECTED'
+              ? tr('Haydovchi so‘rovni rad etdi. Boshqa haydovchini tanlashingiz mumkin.')
+              : tr('Haydovchi javob bermadi.'),
+        );
+      }
+      return;
+    }
+    if (status == 'CANCELLED') {
+      if (b.isActive) {
+        final reason = (row['cancel_reason'] as String?)?.trim();
+        await markCancelled(
+          bookingId: b.id,
+          reason: (reason != null && reason.isNotEmpty) ? reason : tr('Safar bekor qilindi'),
+          cancelledBy: (row['cancelled_by'] as String?) ?? '',
+        );
+      }
+      return;
+    }
+
+    final trip = row['trip'] as Map<String, dynamic>;
+    final agreedPrice = row['agreed_price'] as int?;
+    final taxi = TripCatalogService.fromApi(trip).copyWith(price: agreedPrice ?? trip['price'] as int);
+
+    switch (status) {
+      case 'COUNTERED':
+        if (_statusRank(b.status) < 1 && agreedPrice != null) {
+          await setCounterOffer(
+            bookingId: b.id,
+            taxi: taxi,
+            counterPrice: agreedPrice,
+            offeredPrice: trip['price'] as int,
+          );
+        }
+        break;
+      case 'CONFIRMED':
+        if (_statusRank(b.status) < 2) {
+          await setDriverAccepted(bookingId: b.id, taxi: taxi);
+        }
+        break;
+      case 'DRIVER_ON_WAY':
+        if (_statusRank(b.status) < 3) {
+          await setDriverAccepted(bookingId: b.id, taxi: taxi, etaMinutes: (row['eta_minutes'] as int?) ?? 1);
+        }
+        break;
+      case 'PASSENGER_PICKED':
+        if (_statusRank(b.status) < 4) {
+          await markPickedUp(b.id);
+        }
+        break;
+      case 'COMPLETED':
+        if (_statusRank(b.status) < 5) {
+          await markBookingCompleted(b.id);
+        }
+        break;
+    }
   }
 
   Future<void> _expireInactiveInstant() async {
@@ -422,18 +538,22 @@ class ActiveBookingService extends ChangeNotifier {
     if (!force && hasSameRoute(taxi.from, taxi.to)) {
       return 'Bu yo‘nalishda allaqachon faol bron bor';
     }
-    // Haydovchi serverda e'lon qilgan safar — joy bandligini serverga
-    // yuboramiz, aks holda haydovchi boshqa qurilmada bundan bexabar qoladi.
+    String id;
+    // Haydovchi serverda e'lon qilgan safar — so'rovni serverga yuboramiz va
+    // haqiqiy booking id'sini olamiz (shu id orqali haydovchi o'z inbox'ida
+    // ko'radi va keyinroq holatini pollab turamiz — boshqa qurilmada ham).
     if (taxi.remoteTripId != null) {
       try {
-        await TripApi.instance.book(taxi.remoteTripId!, seats: seats, note: note);
+        final created = await TripApi.instance.book(taxi.remoteTripId!, seats: seats, note: note);
+        id = 'inst_${created['id']}';
       } on ApiException catch (e) {
         return e.message;
       } catch (_) {
         return tr('Internet aloqasi yo‘q yoki server javob bermadi. Qayta urinib ko‘ring.');
       }
+    } else {
+      id = 'inst_${DateTime.now().microsecondsSinceEpoch}';
     }
-    final id = 'inst_${DateTime.now().microsecondsSinceEpoch}';
     bookings = [
       ActiveBooking(
         id: id,
@@ -450,16 +570,21 @@ class ActiveBookingService extends ChangeNotifier {
       ...bookings,
     ];
     await _persist();
-    // ignore: unawaited_futures
-    DriverTripService.instance.pushFromPassengerBooking(
-      from: taxi.from,
-      to: taxi.to,
-      passengers: seats,
-      exactPickup: pickupLabel ?? '',
-      offeredPrice: taxi.price,
-      targetTaxiId: taxi.id,
-      bookingId: id,
-    );
+    if (taxi.remoteTripId == null) {
+      // Faqat server-backed bo'lmagan (demo) taksilar uchun mahalliy ko'chirma —
+      // haqiqiy safarlarda haydovchi so'rovni DriverTripService.pollInbox()
+      // orqali serverdan o'zi bilib oladi.
+      // ignore: unawaited_futures
+      DriverTripService.instance.pushFromPassengerBooking(
+        from: taxi.from,
+        to: taxi.to,
+        passengers: seats,
+        exactPickup: pickupLabel ?? '',
+        offeredPrice: taxi.price,
+        targetTaxiId: taxi.id,
+        bookingId: id,
+      );
+    }
     notifyListeners();
     return null;
   }
@@ -668,13 +793,24 @@ class ActiveBookingService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> complete(
+  /// Natija: muvaffaqiyatda `null`, serverdan xato kelsa xabar matni.
+  Future<String?> complete(
     String bookingId, {
     TripCompletedBy completedBy = TripCompletedBy.passenger,
     bool driverRatedPassenger = false,
     bool passengerRatedDriver = false,
   }) async {
     final booking = byId(bookingId);
+    final remoteId = _parseRemoteBookingId(bookingId);
+    if (remoteId != null) {
+      try {
+        await TripApi.instance.advanceBookingStatus(remoteId, 'COMPLETED');
+      } on ApiException catch (e) {
+        return e.message;
+      } catch (_) {
+        return tr('Internet aloqasi yo‘q yoki server javob bermadi. Qayta urinib ko‘ring.');
+      }
+    }
     await markBookingCompleted(bookingId);
     if (booking != null) {
       await TripCompletionService.instance.recordCompletion(
@@ -699,6 +835,36 @@ class ActiveBookingService extends ChangeNotifier {
       }
     }
     notifyListeners();
+    return null;
+  }
+
+  /// Haydovchi qarshi narx yuborganda yo'lovchi tasdiqlaydi. Server-backed
+  /// (haqiqiy) bronlar uchun tarmoqqa ulanadi; demo/mock taksilar uchun eski
+  /// mahalliy oqim (`DriverTripService.passengerConfirmCounter`) ishlatiladi.
+  /// Natija: muvaffaqiyatda `null`, xato kelsa xabar matni.
+  Future<String?> confirmCounterOffer(String bookingId) async {
+    final booking = byId(bookingId);
+    if (booking == null) return null;
+    final remoteId = _parseRemoteBookingId(bookingId);
+    if (remoteId == null) {
+      await DriverTripService.instance.passengerConfirmCounter(bookingId);
+      return null;
+    }
+    try {
+      await TripApi.instance.confirmCounter(remoteId);
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return tr('Internet aloqasi yo‘q yoki server javob bermadi. Qayta urinib ko‘ring.');
+    }
+    if (booking.driverEtaMinutes != null) {
+      await setDriverAccepted(bookingId: bookingId, taxi: booking.taxi, etaMinutes: booking.driverEtaMinutes!);
+    } else {
+      await setStatus(BookingStatus.confirmed, bookingId: bookingId, taxi: booking.taxi);
+      await setStatus(BookingStatus.onWay, bookingId: bookingId, taxi: booking.taxi);
+    }
+    notifyListeners();
+    return null;
   }
 
   Future<void> clear({BookingKind? kind, String? bookingId}) async {

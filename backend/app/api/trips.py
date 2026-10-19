@@ -3,15 +3,31 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
+from app.config import get_settings
 from app.database import get_db
 from app.deps import get_approved_driver, get_current_user, get_driver_profile, get_optional_user
 from app.models import DriverProfile, Trip, TripBooking, User, Vehicle
-from app.schemas import BookTripIn, CancelIn, OkResponse, TripCreateIn, TripOut
-from app.services.fsm import TRIP_TRANSITIONS, assert_transition
+from app.schemas import (
+    BookTripIn,
+    CancelIn,
+    DriverRespondIn,
+    OkResponse,
+    StatusUpdateIn,
+    TripBookingOut,
+    TripCreateIn,
+    TripOut,
+)
+from app.services.fsm import TRIP_BOOKING_TRANSITIONS, TRIP_TRANSITIONS, assert_transition
 from app.services.notify import notify
-from app.services.serializers import compute_avg_response_secs, parse_dt, trip_out
+from app.services.serializers import booking_out, compute_avg_response_secs, parse_dt, trip_out
 
 router = APIRouter(prefix="/trips", tags=["trips"])
+
+
+def _expire_booking_if_needed(db: Session, booking: TripBooking) -> None:
+    if booking.status in ("PENDING", "COUNTERED") and booking.expires_at and booking.expires_at < datetime.utcnow():
+        assert_transition(TRIP_BOOKING_TRANSITIONS, booking.status, "EXPIRED")
+        booking.status = "EXPIRED"
 
 
 def _load_trip_bundle(db: Session, trip: Trip, avg_response_sec: int | None = None):
@@ -90,7 +106,48 @@ def my_trips(driver: DriverProfile = Depends(get_approved_driver), db: Session =
     return [_load_trip_bundle(db, t) for t in trips]
 
 
-@router.post("/{trip_id}/book", response_model=OkResponse)
+# NOTE: literal "/bookings/inbox" must stay registered before the dynamic
+# "/bookings/{booking_id}" below it, otherwise "inbox" would be captured as
+# booking_id and fail int conversion.
+@router.get("/bookings/inbox", response_model=list[TripBookingOut])
+def bookings_inbox(driver: DriverProfile = Depends(get_approved_driver), db: Session = Depends(get_db)):
+    if not driver.is_online:
+        return []
+    rows = (
+        db.query(TripBooking)
+        .join(Trip, Trip.id == TripBooking.trip_id)
+        .filter(
+            Trip.driver_id == driver.id,
+            TripBooking.status.in_(["PENDING", "COUNTERED", "CONFIRMED", "DRIVER_ON_WAY", "PASSENGER_PICKED"]),
+        )
+        .order_by(TripBooking.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    out = []
+    for b in rows:
+        _expire_booking_if_needed(db, b)
+        out.append(booking_out(db, b))
+    db.commit()
+    return out
+
+
+@router.get("/bookings/{booking_id}", response_model=TripBookingOut)
+def get_booking(booking_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    booking = db.get(TripBooking, booking_id)
+    if not booking:
+        raise HTTPException(404, "Band qilish topilmadi.")
+    trip = db.get(Trip, booking.trip_id)
+    driver = db.query(DriverProfile).filter(DriverProfile.user_id == user.id).first()
+    is_owner_driver = driver is not None and trip is not None and trip.driver_id == driver.id
+    if booking.passenger_id != user.id and not is_owner_driver:
+        raise HTTPException(403, "Bu amalni bajarish huquqingiz yo‘q.")
+    _expire_booking_if_needed(db, booking)
+    db.commit()
+    return booking_out(db, booking)
+
+
+@router.post("/{trip_id}/book", response_model=TripBookingOut)
 def book_trip(trip_id: int, body: BookTripIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     trip = db.query(Trip).filter(Trip.id == trip_id).with_for_update(of=Trip).first() if False else db.query(Trip).filter(Trip.id == trip_id).first()
     # SQLite: emulate lock with re-check
@@ -107,20 +164,22 @@ def book_trip(trip_id: int, body: BookTripIn, user: User = Depends(get_current_u
         raise HTTPException(400, "Safar vaqti o‘tgan.")
     if body.seats > trip.seats_available:
         raise HTTPException(400, "Bo‘sh joy yetarli emas.")
-    exists = db.query(TripBooking).filter(TripBooking.trip_id == trip.id, TripBooking.passenger_id == user.id, TripBooking.status == "CONFIRMED").first()
+    exists = db.query(TripBooking).filter(TripBooking.trip_id == trip.id, TripBooking.passenger_id == user.id).first()
     if exists:
+        if exists.status in ("PENDING", "COUNTERED"):
+            raise HTTPException(400, "Siz bu safarga allaqachon so‘rov yubordingiz — javobni kuting.")
         raise HTTPException(400, "Siz allaqachon shu safarga joy band qilgansiz.")
 
-    # Race-safe: re-read seats
-    trip = db.query(Trip).filter(Trip.id == trip_id).first()
-    if trip.seats_available < body.seats:
-        raise HTTPException(400, "Bo‘sh joy yetarli emas.")
-    trip.seats_available -= body.seats
-    if trip.seats_available == 0:
-        assert_transition(TRIP_TRANSITIONS, trip.status, "FULL")
-        trip.status = "FULL"
-    booking = TripBooking(trip_id=trip.id, passenger_id=user.id, seats=body.seats, status="CONFIRMED")
+    settings = get_settings()
+    booking = TripBooking(
+        trip_id=trip.id,
+        passenger_id=user.id,
+        seats=body.seats,
+        status="PENDING",
+        expires_at=datetime.utcnow() + timedelta(seconds=settings.instant_booking_timeout_sec),
+    )
     db.add(booking)
+    db.flush()
     driver = db.get(DriverProfile, trip.driver_id)
     if driver:
         note = (body.note or "").strip()
@@ -130,23 +189,24 @@ def book_trip(trip_id: int, body: BookTripIn, user: User = Depends(get_current_u
         notify(
             db,
             user_id=driver.user_id,
-            title="Yangi joy band qilindi",
+            title="Yangi yo‘lovchi so‘rovi",
             body=booking_body,
-            type="booking",
-            related_type="trip",
-            related_id=trip.id,
+            type="new_booking_request",
+            related_type="trip_booking",
+            related_id=booking.id,
         )
     notify(
         db,
         user_id=user.id,
-        title="Joy band qilindi",
-        body=f"{trip.from_text} → {trip.to_text}",
-        type="booking",
-        related_type="trip",
-        related_id=trip.id,
+        title="So‘rovingiz yuborildi!",
+        body="Haydovchi javobini kutamiz...",
+        type="booking_requested",
+        related_type="trip_booking",
+        related_id=booking.id,
     )
     db.commit()
-    return OkResponse(ok=True, message="Joy band qilindi.")
+    db.refresh(booking)
+    return booking_out(db, booking)
 
 
 @router.post("/{trip_id}/cancel", response_model=OkResponse)
@@ -158,7 +218,10 @@ def cancel_trip(trip_id: int, body: CancelIn, user: User = Depends(get_current_u
     if driver and trip.driver_id == driver.id:
         assert_transition(TRIP_TRANSITIONS, trip.status, "CANCELLED")
         trip.status = "CANCELLED"
-        for b in db.query(TripBooking).filter(TripBooking.trip_id == trip.id, TripBooking.status == "CONFIRMED"):
+        for b in db.query(TripBooking).filter(
+            TripBooking.trip_id == trip.id,
+            TripBooking.status.in_(["PENDING", "COUNTERED", "CONFIRMED", "DRIVER_ON_WAY", "PASSENGER_PICKED"]),
+        ):
             b.status = "CANCELLED"
             b.cancelled_by = "driver"
             b.cancel_reason = body.reason
@@ -190,3 +253,250 @@ def cancel_trip(trip_id: int, body: CancelIn, user: User = Depends(get_current_u
         )
     db.commit()
     return OkResponse(ok=True, message="Band bekor qilindi.")
+
+
+@router.post("/bookings/{booking_id}/respond", response_model=TripBookingOut)
+def respond_booking(
+    booking_id: int,
+    body: DriverRespondIn,
+    driver: DriverProfile = Depends(get_approved_driver),
+    db: Session = Depends(get_db),
+):
+    if not driver.is_online:
+        raise HTTPException(400, "Avval onlayn holatga o‘ting.")
+    booking = db.get(TripBooking, booking_id)
+    if not booking:
+        raise HTTPException(404, "So‘rov topilmadi.")
+    trip = db.get(Trip, booking.trip_id)
+    if not trip or trip.driver_id != driver.id:
+        raise HTTPException(403, "Bu amalni bajarish huquqingiz yo‘q.")
+    _expire_booking_if_needed(db, booking)
+    if booking.status != "PENDING":
+        raise HTTPException(400, "Bu so‘rovga javob berib bo‘lmaydi.")
+
+    action = body.action.lower()
+    if action == "reject":
+        assert_transition(TRIP_BOOKING_TRANSITIONS, booking.status, "REJECTED")
+        booking.status = "REJECTED"
+        booking.cancelled_by = "driver"
+        booking.cancel_reason = body.message
+        booking.cancelled_at = datetime.utcnow()
+        notify(
+            db,
+            user_id=booking.passenger_id,
+            title="So‘rov rad etildi",
+            body="Haydovchi so‘rovni rad etdi. Boshqa taksini tanlashingiz mumkin.",
+            type="booking_rejected",
+            related_type="trip_booking",
+            related_id=booking.id,
+        )
+        db.commit()
+        return booking_out(db, booking)
+
+    if action != "accept":
+        raise HTTPException(400, "action: accept yoki reject.")
+
+    agreed = body.offered_price if body.offered_price is not None else trip.price
+    is_counter = agreed != trip.price
+
+    if is_counter:
+        assert_transition(TRIP_BOOKING_TRANSITIONS, booking.status, "COUNTERED")
+        booking.status = "COUNTERED"
+        booking.agreed_price = agreed
+        booking.eta_minutes = body.eta_minutes
+        notify(
+            db,
+            user_id=booking.passenger_id,
+            title="Qarshi narx taklifi",
+            body=f"Haydovchi {agreed} so‘m taklif qildi.",
+            type="booking_countered",
+            related_type="trip_booking",
+            related_id=booking.id,
+        )
+        db.commit()
+        return booking_out(db, booking)
+
+    # Narx mos keldi — joy sonini qayta tekshirib (race-safe re-read) kamaytiramiz.
+    trip = db.query(Trip).filter(Trip.id == trip.id).first()
+    if trip.seats_available < booking.seats:
+        raise HTTPException(400, "Bo‘sh joy yetarli emas — avval boshqa so‘rovni rad eting.")
+    trip.seats_available -= booking.seats
+    if trip.seats_available == 0:
+        assert_transition(TRIP_TRANSITIONS, trip.status, "FULL")
+        trip.status = "FULL"
+    booking.agreed_price = agreed
+    if body.eta_minutes is not None:
+        booking.eta_minutes = body.eta_minutes
+        booking.eta_arrive_at = datetime.utcnow() + timedelta(minutes=body.eta_minutes)
+        assert_transition(TRIP_BOOKING_TRANSITIONS, booking.status, "DRIVER_ON_WAY")
+        booking.status = "DRIVER_ON_WAY"
+    else:
+        assert_transition(TRIP_BOOKING_TRANSITIONS, booking.status, "CONFIRMED")
+        booking.status = "CONFIRMED"
+    notify(
+        db,
+        user_id=booking.passenger_id,
+        title="Haydovchi qabul qildi!",
+        body=f"{trip.from_text} → {trip.to_text}",
+        type="booking_accepted",
+        related_type="trip_booking",
+        related_id=booking.id,
+    )
+    db.commit()
+    return booking_out(db, booking)
+
+
+@router.post("/bookings/{booking_id}/confirm-counter", response_model=TripBookingOut)
+def confirm_counter(booking_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    booking = db.get(TripBooking, booking_id)
+    if not booking or booking.passenger_id != user.id:
+        raise HTTPException(403, "Bu amalni bajarish huquqingiz yo‘q.")
+    _expire_booking_if_needed(db, booking)
+    if booking.status != "COUNTERED":
+        raise HTTPException(400, "Tasdiqlash mumkin emas.")
+    trip = db.query(Trip).filter(Trip.id == booking.trip_id).first()
+    if not trip:
+        raise HTTPException(404, "Safar topilmadi.")
+    if trip.seats_available < booking.seats:
+        raise HTTPException(400, "Bo‘sh joy yetarli emas.")
+    trip.seats_available -= booking.seats
+    if trip.seats_available == 0:
+        assert_transition(TRIP_TRANSITIONS, trip.status, "FULL")
+        trip.status = "FULL"
+    if booking.eta_minutes is not None:
+        booking.eta_arrive_at = datetime.utcnow() + timedelta(minutes=booking.eta_minutes)
+        assert_transition(TRIP_BOOKING_TRANSITIONS, booking.status, "DRIVER_ON_WAY")
+        booking.status = "DRIVER_ON_WAY"
+    else:
+        assert_transition(TRIP_BOOKING_TRANSITIONS, booking.status, "CONFIRMED")
+        booking.status = "CONFIRMED"
+    driver = db.get(DriverProfile, trip.driver_id)
+    if driver:
+        notify(
+            db,
+            user_id=driver.user_id,
+            title="Yo‘lovchi narxni tasdiqladi",
+            body=f"{trip.from_text} → {trip.to_text}",
+            type="booking_confirmed",
+            related_type="trip_booking",
+            related_id=booking.id,
+        )
+    db.commit()
+    return booking_out(db, booking)
+
+
+@router.post("/bookings/{booking_id}/status", response_model=TripBookingOut)
+def advance_booking_status(
+    booking_id: int,
+    body: StatusUpdateIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    booking = db.get(TripBooking, booking_id)
+    if not booking:
+        raise HTTPException(404, "Band qilish topilmadi.")
+    trip = db.get(Trip, booking.trip_id)
+    driver = db.query(DriverProfile).filter(DriverProfile.user_id == user.id).first()
+    is_owner_driver = driver is not None and trip is not None and trip.driver_id == driver.id
+    is_passenger = booking.passenger_id == user.id
+    new = body.status.upper()
+
+    if new == "COMPLETED":
+        if not is_owner_driver and not is_passenger:
+            raise HTTPException(403, "Bu amalni bajarish huquqingiz yo‘q.")
+    elif not is_owner_driver:
+        raise HTTPException(403, "Faqat haydovchi holatni o‘zgartira oladi.")
+
+    assert_transition(TRIP_BOOKING_TRANSITIONS, booking.status, new)
+    booking.status = new
+    if new == "PASSENGER_PICKED":
+        booking.picked_up_at = datetime.utcnow()
+
+    trip_driver = db.get(DriverProfile, trip.driver_id) if trip else None
+    titles = {
+        "DRIVER_ON_WAY": ("Haydovchi yo‘lga chiqdi", "Yo‘lovchini olishga yo‘l oldim"),
+        "PASSENGER_PICKED": ("Yo‘lovchi olindi", "Haydovchi sizni oldi"),
+        "COMPLETED": ("Safar yakunlandi", "Safaringiz yakunlandi. Baholash mumkin."),
+    }
+    if new in titles:
+        if new == "COMPLETED" and is_passenger and not is_owner_driver:
+            if trip_driver:
+                notify(
+                    db,
+                    user_id=trip_driver.user_id,
+                    title=titles[new][0],
+                    body="Yo‘lovchi safarni yakunladi.",
+                    type=new.lower(),
+                    related_type="trip_booking",
+                    related_id=booking.id,
+                )
+        else:
+            notify(
+                db,
+                user_id=booking.passenger_id,
+                title=titles[new][0],
+                body=titles[new][1],
+                type=new.lower(),
+                related_type="trip_booking",
+                related_id=booking.id,
+            )
+
+    if new == "COMPLETED" and trip_driver:
+        price = booking.agreed_price or (trip.price if trip else 0)
+        trip_driver.trips_count += 1
+        trip_driver.total_earnings += price
+    db.commit()
+    return booking_out(db, booking)
+
+
+@router.post("/bookings/{booking_id}/cancel", response_model=OkResponse)
+def cancel_booking(booking_id: int, body: CancelIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    booking = db.get(TripBooking, booking_id)
+    if not booking:
+        raise HTTPException(404, "Band qilish topilmadi.")
+    if booking.status in ("COMPLETED", "CANCELLED", "REJECTED", "EXPIRED"):
+        raise HTTPException(400, "Bu band qilishni bekor qilib bo‘lmaydi.")
+    trip = db.get(Trip, booking.trip_id)
+    driver = db.query(DriverProfile).filter(DriverProfile.user_id == user.id).first()
+    is_owner_driver = driver is not None and trip is not None and trip.driver_id == driver.id
+    is_passenger = booking.passenger_id == user.id
+    if not is_passenger and not is_owner_driver:
+        raise HTTPException(403, "Bu amalni bajarish huquqingiz yo‘q.")
+    if is_owner_driver and not is_passenger and booking.status == "PENDING":
+        raise HTTPException(400, "Hali javob berilmagan so‘rovni /respond orqali rad eting.")
+
+    had_seats = booking.status in ("CONFIRMED", "DRIVER_ON_WAY", "PASSENGER_PICKED")
+    assert_transition(TRIP_BOOKING_TRANSITIONS, booking.status, "CANCELLED")
+    booking.status = "CANCELLED"
+    booking.cancelled_by = "passenger" if is_passenger else "driver"
+    booking.cancel_reason = body.reason
+    booking.cancelled_at = datetime.utcnow()
+    if had_seats and trip:
+        trip.seats_available = min(trip.seats_total, trip.seats_available + booking.seats)
+        if trip.status == "FULL":
+            trip.status = "OPEN"
+    if trip:
+        if is_passenger:
+            driver_profile = db.get(DriverProfile, trip.driver_id)
+            if driver_profile:
+                notify(
+                    db,
+                    user_id=driver_profile.user_id,
+                    title="Safar bekor qilindi",
+                    body=body.reason,
+                    type="booking_cancelled",
+                    related_type="trip_booking",
+                    related_id=booking.id,
+                )
+        else:
+            notify(
+                db,
+                user_id=booking.passenger_id,
+                title="Safar bekor qilindi",
+                body=body.reason,
+                type="booking_cancelled",
+                related_type="trip_booking",
+                related_id=booking.id,
+            )
+    db.commit()
+    return OkResponse(ok=True, message="Bekor qilindi.")

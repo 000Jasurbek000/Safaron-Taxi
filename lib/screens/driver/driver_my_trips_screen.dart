@@ -158,14 +158,14 @@ class DriverMyTripsScreen extends StatelessWidget {
                                       title: trRateLabel(o.passengerName),
                                     );
                                     if (stars == null) return;
-                                    await svc.completeOrder(
+                                    final err = await svc.completeOrder(
                                       o.id,
                                       completedBy: TripCompletedBy.driver,
                                       driverRatedPassenger: true,
                                     );
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('${tr('Safar yakunlandi')} · $stars★'), behavior: SnackBarBehavior.floating),
+                                        SnackBar(content: Text(err ?? '${tr('Safar yakunlandi')} · $stars★'), behavior: SnackBarBehavior.floating),
                                       );
                                     }
                                   },

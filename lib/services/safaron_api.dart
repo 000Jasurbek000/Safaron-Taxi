@@ -107,11 +107,12 @@ class TripApi {
     return data as Map<String, dynamic>;
   }
 
-  Future<void> book(int tripId, {int seats = 1, String? note}) async {
-    await ApiClient.instance.post('/api/trips/$tripId/book', body: {
+  Future<Map<String, dynamic>> book(int tripId, {int seats = 1, String? note}) async {
+    final data = await ApiClient.instance.post('/api/trips/$tripId/book', body: {
       'seats': seats,
       if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
     });
+    return data as Map<String, dynamic>;
   }
 
   Future<void> cancel(int tripId, {String reason = ''}) async {
@@ -121,6 +122,46 @@ class TripApi {
   Future<List<Map<String, dynamic>>> mine() async {
     final data = await ApiClient.instance.get('/api/trips/mine');
     return (data as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> getBooking(int bookingId) async {
+    final data = await ApiClient.instance.get('/api/trips/bookings/$bookingId');
+    return data as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> bookingsInbox() async {
+    final data = await ApiClient.instance.get('/api/trips/bookings/inbox');
+    return (data as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> respondBooking(
+    int bookingId, {
+    required String action,
+    int? offeredPrice,
+    String? message,
+    int? etaMinutes,
+  }) async {
+    final data = await ApiClient.instance.post('/api/trips/bookings/$bookingId/respond', body: {
+      'action': action,
+      if (offeredPrice != null) 'offered_price': offeredPrice,
+      if (message != null && message.trim().isNotEmpty) 'message': message.trim(),
+      if (etaMinutes != null) 'eta_minutes': etaMinutes,
+    });
+    return data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> confirmCounter(int bookingId) async {
+    final data = await ApiClient.instance.post('/api/trips/bookings/$bookingId/confirm-counter');
+    return data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> advanceBookingStatus(int bookingId, String status) async {
+    final data = await ApiClient.instance.post('/api/trips/bookings/$bookingId/status', body: {'status': status});
+    return data as Map<String, dynamic>;
+  }
+
+  Future<void> cancelBooking(int bookingId, String reason) async {
+    await ApiClient.instance.post('/api/trips/bookings/$bookingId/cancel', body: {'reason': reason});
   }
 }
 

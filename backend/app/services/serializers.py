@@ -1,9 +1,9 @@
 from datetime import datetime
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
-from app.models import DriverProfile, DriverResponse, Trip, TripRequest, User, Vehicle
-from app.schemas import DriverResponseOut, RequestOut, TripOut, UserOut
+from app.models import DriverProfile, DriverResponse, Trip, TripBooking, TripRequest, User, Vehicle
+from app.schemas import DriverResponseOut, RequestOut, TripBookingOut, TripOut, UserOut
 from app.services.phone import format_phone_display
 
 
@@ -84,6 +84,39 @@ def trip_out(
         price=trip.price,
         note=trip.note,
         status=trip.status,
+    )
+
+
+def trip_out_for(db: Session, trip: Trip) -> TripOut:
+    driver = (
+        db.query(DriverProfile)
+        .options(joinedload(DriverProfile.user), joinedload(DriverProfile.vehicle))
+        .filter(DriverProfile.id == trip.driver_id)
+        .first()
+    )
+    return trip_out(trip, driver, driver.vehicle if driver else None, driver.user if driver else None)
+
+
+def booking_out(db: Session, booking: TripBooking) -> TripBookingOut:
+    passenger = db.get(User, booking.passenger_id)
+    return TripBookingOut(
+        id=booking.id,
+        trip_id=booking.trip_id,
+        passenger_id=booking.passenger_id,
+        seats=booking.seats,
+        status=booking.status,
+        agreed_price=booking.agreed_price,
+        eta_minutes=booking.eta_minutes,
+        eta_arrive_at=booking.eta_arrive_at,
+        picked_up_at=booking.picked_up_at,
+        cancelled_by=booking.cancelled_by,
+        cancel_reason=booking.cancel_reason,
+        created_at=booking.created_at,
+        expires_at=booking.expires_at,
+        trip=trip_out_for(db, booking.trip),
+        passenger_name=passenger.full_name if passenger else "",
+        passenger_phone=passenger.phone if passenger else "",
+        passenger_rating=passenger.rating_avg if passenger else 5.0,
     )
 
 

@@ -303,7 +303,14 @@ class _LiveOrderCard extends StatelessWidget {
               width: double.infinity,
               height: 42,
               child: ElevatedButton(
-                onPressed: () => DriverTripService.instance.markPassengerPickedUp(order.id),
+                onPressed: () async {
+                  final err = await DriverTripService.instance.markPassengerPickedUp(order.id);
+                  if (err != null && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(err), behavior: SnackBarBehavior.floating),
+                    );
+                  }
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.onPrimary,
@@ -321,14 +328,14 @@ class _LiveOrderCard extends StatelessWidget {
                 onPressed: () async {
                   final stars = await showTripRatingDialog(context, title: tr('Yo‘lovchini baholang'));
                   if (stars == null) return;
-                  await DriverTripService.instance.completeOrder(
+                  final err = await DriverTripService.instance.completeOrder(
                     order.id,
                     completedBy: TripCompletedBy.driver,
                     driverRatedPassenger: true,
                   );
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('${tr('Safar yakunlandi')} · $stars★'), behavior: SnackBarBehavior.floating),
+                    SnackBar(content: Text(err ?? '${tr('Safar yakunlandi')} · $stars★'), behavior: SnackBarBehavior.floating),
                   );
                 },
                 style: ElevatedButton.styleFrom(

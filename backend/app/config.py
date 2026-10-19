@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     upload_dir: str = str(BASE_DIR / "uploads")
     access_token_expire_minutes: int = 60 * 24 * 30
     booking_timeout_sec: int = 300
+    instant_booking_timeout_sec: int = 3600
     driver_heartbeat_sec: int = 60
     driver_offline_after_sec: int = 120
     timezone: str = "Asia/Tashkent"
