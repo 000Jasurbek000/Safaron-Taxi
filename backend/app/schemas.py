@@ -157,6 +157,7 @@ class TripOut(BaseModel):
 
 class BookTripIn(BaseModel):
     seats: int = Field(default=1, ge=1, le=15)
+    note: Optional[str] = None
 
 
 class RequestCreateIn(BaseModel):

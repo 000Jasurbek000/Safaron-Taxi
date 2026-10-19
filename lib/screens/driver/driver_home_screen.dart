@@ -12,6 +12,7 @@ import '../../services/profile_service.dart';
 import '../../services/trip_completion_service.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/eta_util.dart';
+import '../../widgets/booking_alert_banner.dart';
 import '../../widgets/driver_inbox_banner.dart';
 import '../../widgets/rating_dialog.dart';
 import '../../widgets/safaron_header.dart';
@@ -96,6 +97,7 @@ class DriverHomeScreen extends StatelessWidget {
                   style: GoogleFonts.montserrat(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 12),
+                const BookingAlertBanner(),
                 const DriverInboxBanner(),
                 if (svc.lastDriverNotice != null) ...[
                   const SizedBox(height: 8),

@@ -417,6 +417,7 @@ class ActiveBookingService extends ChangeNotifier {
     required int seats,
     String? pickupLabel,
     bool force = false,
+    String? note,
   }) async {
     if (!force && hasSameRoute(taxi.from, taxi.to)) {
       return 'Bu yo‘nalishda allaqachon faol bron bor';
@@ -425,7 +426,7 @@ class ActiveBookingService extends ChangeNotifier {
     // yuboramiz, aks holda haydovchi boshqa qurilmada bundan bexabar qoladi.
     if (taxi.remoteTripId != null) {
       try {
-        await TripApi.instance.book(taxi.remoteTripId!, seats: seats);
+        await TripApi.instance.book(taxi.remoteTripId!, seats: seats, note: note);
       } on ApiException catch (e) {
         return e.message;
       } catch (_) {

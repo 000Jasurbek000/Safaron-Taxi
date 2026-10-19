@@ -123,11 +123,15 @@ def book_trip(trip_id: int, body: BookTripIn, user: User = Depends(get_current_u
     db.add(booking)
     driver = db.get(DriverProfile, trip.driver_id)
     if driver:
+        note = (body.note or "").strip()
+        booking_body = f"{user.full_name}: {trip.from_text} → {trip.to_text}"
+        if note:
+            booking_body += f" ({note})"
         notify(
             db,
             user_id=driver.user_id,
             title="Yangi joy band qilindi",
-            body=f"{user.full_name}: {trip.from_text} → {trip.to_text}",
+            body=booking_body,
             type="booking",
             related_type="trip",
             related_id=trip.id,

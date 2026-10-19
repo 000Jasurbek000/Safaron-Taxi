@@ -25,6 +25,7 @@ class WaitingDriverScreen extends StatefulWidget {
     this.exactPickup = '',
     this.bookingId,
     this.forceInstant = false,
+    this.note,
   });
 
   final TaxiOffer taxi;
@@ -32,6 +33,7 @@ class WaitingDriverScreen extends StatefulWidget {
   final String exactPickup;
   final String? bookingId;
   final bool forceInstant;
+  final String? note;
 
   @override
   State<WaitingDriverScreen> createState() => _WaitingDriverScreenState();
@@ -70,6 +72,7 @@ class _WaitingDriverScreenState extends State<WaitingDriverScreen>
             ? widget.taxi.from
             : '${widget.taxi.from} · ${widget.exactPickup.trim()}',
         force: widget.forceInstant,
+        note: widget.note,
       );
       if (err != null && mounted) {
         if (err.contains('faol bron')) {
@@ -86,6 +89,7 @@ class _WaitingDriverScreenState extends State<WaitingDriverScreen>
                 ? widget.taxi.from
                 : '${widget.taxi.from} · ${widget.exactPickup.trim()}',
             force: true,
+            note: widget.note,
           );
           if (retry != null && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

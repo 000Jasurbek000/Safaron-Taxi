@@ -107,8 +107,15 @@ class TripApi {
     return data as Map<String, dynamic>;
   }
 
-  Future<void> book(int tripId, {int seats = 1}) async {
-    await ApiClient.instance.post('/api/trips/$tripId/book', body: {'seats': seats});
+  Future<void> book(int tripId, {int seats = 1, String? note}) async {
+    await ApiClient.instance.post('/api/trips/$tripId/book', body: {
+      'seats': seats,
+      if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+    });
+  }
+
+  Future<void> cancel(int tripId, {String reason = ''}) async {
+    await ApiClient.instance.post('/api/trips/$tripId/cancel', body: {'reason': reason});
   }
 
   Future<List<Map<String, dynamic>>> mine() async {

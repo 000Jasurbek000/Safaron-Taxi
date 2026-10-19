@@ -74,7 +74,13 @@ class TaxiOffer {
   bool get isOpenTrip =>
       (from.isEmpty && to.isEmpty) ||
       from == 'Har qayerdan' ||
-      to == 'Har qayerga';
+      to == 'Har qayerga' ||
+      // Haydovchi yo'nalishni bo'sh qoldirib e'lon qilsa, server bu
+      // joy-to'ldiruvchi matnlarni saqlaydi (bo'sh satr emas) — shuning
+      // uchun boshqa qurilmadan kelgan safarda ham shu matnlarni tanish
+      // kerak, aks holda ochiq safar oddiy belgilangan safar deb o'qiladi.
+      from == 'Ochiq' ||
+      to == 'Yo‘nalish ochiq';
 
   String get extraDestinationsLabel {
     if (toAliases.isEmpty) return '';

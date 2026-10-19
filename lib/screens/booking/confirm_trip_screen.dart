@@ -45,6 +45,7 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
   late final TextEditingController _pickup;
   late final TextEditingController _from;
   late final TextEditingController _to;
+  DateTime? _when;
 
   @override
   void initState() {
@@ -65,6 +66,33 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
     _pickup = TextEditingController(text: pickup);
     _offeredPrice.addListener(() {
       if (mounted) setState(() {});
+    });
+  }
+
+  String get _whenLabel {
+    final w = _when;
+    if (w == null) return tr('Hozir');
+    final hh = w.hour.toString().padLeft(2, '0');
+    final mm = w.minute.toString().padLeft(2, '0');
+    return '${w.day}-${w.month.toString().padLeft(2, '0')} $hh:$mm';
+  }
+
+  Future<void> _pickWhen() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _when ?? now,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 30)),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_when ?? now),
+    );
+    if (time == null || !mounted) return;
+    setState(() {
+      _when = DateTime(date.year, date.month, date.day, time.hour, time.minute);
     });
   }
 
@@ -209,7 +237,7 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                         children: [
                           Text(tr('Yo‘nalishingiz'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.navy)),
                           Text(
-                            tr('Haydovchi ochiq taksi e’lon qilgan — qayerdan, qayerga va narxni o‘zingiz kiriting.'),
+                            tr('Haydovchi ochiq taksi e’lon qilgan — qayerdan, qayerga, qachon va narxni o‘zingiz kiriting.'),
                             style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted, height: 1.35),
                           ),
                           const SizedBox(height: 10),
@@ -233,6 +261,20 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                             ),
                             style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 10),
+                          InkWell(
+                            onTap: _pickWhen,
+                            borderRadius: BorderRadius.circular(12),
+                            child: InputDecorator(
+                              decoration: InputDecoration(
+                                labelText: tr('Qachon'),
+                                labelStyle: GoogleFonts.montserrat(),
+                                prefixIcon: const Icon(Icons.schedule_rounded, color: AppColors.primary, size: 18),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              child: Text(_whenLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
+                            ),
                           ),
                         ],
                       ),
@@ -473,6 +515,9 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                         }
 
                         if (!context.mounted) return;
+                        final note = _isOpenTrip
+                            ? '${tr('Qachon')}: $_whenLabel'
+                            : null;
                         await Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => WaitingDriverScreen(
@@ -480,6 +525,7 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                               seats: _seats,
                               exactPickup: _pickup.text.trim(),
                               forceInstant: forceDuplicate,
+                              note: note,
                             ),
                           ),
                         );

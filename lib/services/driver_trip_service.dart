@@ -559,6 +559,7 @@ class DriverTripService extends ChangeNotifier {
   /// Onlayn tasdiqlangan haydovchi e’lonlari katalogga (oflayn ham oxirida ko‘rinadi).
   List<TaxiOffer> publishedCatalogOffers() {
     if (!ProfileService.instance.isApprovedDriver) return [];
+    if (!isOnline) return [];
     final p = ProfileService.instance;
     return activeTrips.map((t) {
       return TaxiOffer(
@@ -1046,6 +1047,19 @@ class DriverTripService extends ChangeNotifier {
   }
 
   Future<void> deactivateTrip(String id) async {
+    // Serverda yaratilgan safar bo'lsa — uni ham bekor qilamiz, aks holda
+    // yo'lovchiga u hamon ochiq (band qilish mumkin) bo'lib ko'rinaveradi.
+    if (id.startsWith('dt_')) {
+      final remoteId = int.tryParse(id.substring(3));
+      if (remoteId != null) {
+        try {
+          await TripApi.instance.cancel(remoteId);
+        } catch (_) {
+          // Server bilan bog'lanib bo'lmasa ham mahalliy holatni yopamiz —
+          // keyingi sinxronlashda farq to'g'rilanadi.
+        }
+      }
+    }
     myTrips = [
       for (final t in myTrips)
         if (t.id == id) t.copyWith(active: false) else t,
