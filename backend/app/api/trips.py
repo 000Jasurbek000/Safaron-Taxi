@@ -111,14 +111,22 @@ def my_trips(driver: DriverProfile = Depends(get_approved_driver), db: Session =
 # booking_id and fail int conversion.
 @router.get("/bookings/inbox", response_model=list[TripBookingOut])
 def bookings_inbox(driver: DriverProfile = Depends(get_approved_driver), db: Session = Depends(get_db)):
-    if not driver.is_online:
-        return []
+    # Oflayn bo'lsa faqat YANGI (PENDING, hali javob berilmagan) band
+    # qilishlar yashiriladi — COUNTERED/CONFIRMED/DRIVER_ON_WAY/
+    # PASSENGER_PICKED kabi allaqachon qabul qilingan buyurtmalar
+    # (haydovchining faol majburiyati) oflaynda ham ko'rinishda qolishi
+    # kerak. Avval butun ro'yxat oflaynda bo'sh qaytarilardi — heartbeat
+    # bir lahza kechiksa ham (fon rejimi, tarmoq uzilishi) bu tasdiqlangan
+    # safarni mobil ilovada vaqtincha "yo'qolib" ko'rsatardi.
+    statuses = ["COUNTERED", "CONFIRMED", "DRIVER_ON_WAY", "PASSENGER_PICKED"]
+    if driver.is_online:
+        statuses.append("PENDING")
     rows = (
         db.query(TripBooking)
         .join(Trip, Trip.id == TripBooking.trip_id)
         .filter(
             Trip.driver_id == driver.id,
-            TripBooking.status.in_(["PENDING", "COUNTERED", "CONFIRMED", "DRIVER_ON_WAY", "PASSENGER_PICKED"]),
+            TripBooking.status.in_(statuses),
         )
         .order_by(TripBooking.created_at.desc())
         .limit(50)

@@ -315,6 +315,13 @@ class DriverTripService extends ChangeNotifier {
   String? _lastPassengerNotice;
   String? _lastDriverNotice;
 
+  /// Oldindan bron so'rovi ketma-ket necha marta "poll'dan tushib qoldi"
+  /// deb topilganini sanaydi — bitta vaqtinchalik bo'sh javob (masalan
+  /// `is_online` holati bir lahza noto'g'ri ko'ringanda) darhol "bekor
+  /// qilindi" deb ko'rsatib yubormasligi uchun ikki marta ketma-ket
+  /// tasdiqlanishi talab qilinadi.
+  final Map<String, int> _missedPrebookPolls = {};
+
   int? _remoteBookingId(String orderId) {
     if (!orderId.startsWith('inst_')) return null;
     return int.tryParse(orderId.substring(5));
@@ -483,6 +490,7 @@ class DriverTripService extends ChangeNotifier {
     _inboxPollTimer = null;
     orders = [];
     myTrips = [];
+    _missedPrebookPolls.clear();
     await _persistOrders();
     await _persistTrips();
     notifyListeners();
@@ -698,6 +706,7 @@ class DriverTripService extends ChangeNotifier {
         final order = _prebookOrderFromServerRow(row);
         if (order == null) continue;
         seenIds.add(order.id);
+        _missedPrebookPolls.remove(order.id);
         await addPassengerOrder(order);
       }
       final stale = orders.where((o) =>
@@ -707,7 +716,21 @@ class DriverTripService extends ChangeNotifier {
               o.status == PassengerOrderStatus.counterOffered ||
               o.status == PassengerOrderStatus.accepted) &&
           !seenIds.contains(o.id));
-      final staleIds = stale.map((o) => o.id).toList();
+      // Ikki marta KETMA-KET poll'dan tushib qolmaguncha bekor qilmaymiz —
+      // bitta vaqtinchalik bo'sh javob (server tarmoq sekinligi yoki
+      // haydovchining onlayn holati bir lahza noto'g'ri ko'rinishi) butun
+      // tasdiqlangan safarni noto'g'ri "yo'lovchi boshqasini tanladi" deb
+      // bekor qilib yubormasligi uchun.
+      final staleIds = <String>[];
+      for (final o in stale) {
+        final misses = (_missedPrebookPolls[o.id] ?? 0) + 1;
+        if (misses >= 2) {
+          staleIds.add(o.id);
+          _missedPrebookPolls.remove(o.id);
+        } else {
+          _missedPrebookPolls[o.id] = misses;
+        }
+      }
       if (staleIds.isNotEmpty) {
         orders = [
           for (final o in orders)

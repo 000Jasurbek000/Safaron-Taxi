@@ -128,31 +128,40 @@ def my_requests(user: User = Depends(get_current_user), db: Session = Depends(ge
 
 @router.get("/inbox", response_model=list[RequestOut])
 def driver_inbox(driver: DriverProfile = Depends(get_approved_driver), db: Session = Depends(get_db)):
-    if not driver.is_online:
-        return []
+    # Oflayn bo'lsa faqat YANGI (hali javob berilmagan) so'rovlar
+    # yashiriladi — allaqachon qabul qilingan/tanlangan so'rovlar
+    # (haydovchining faol majburiyatlari) oflaynda ham ko'rinishda qolishi
+    # kerak. Avval butun ro'yxat oflaynda bo'sh qaytarilardi — bu esa
+    # heartbeat bir lahza kechiksa (tarmoq uzilishi, ilova fonga ketishi)
+    # haydovchining tasdiqlangan safari mobil ilovada "poll'dan tushib
+    # qoldi" deb xato ravishda bekor qilinishiga olib kelardi (requests.py
+    # pastidagi stale-reconciliation bilan birga ishlaganda).
+    if driver.is_online:
+        # Bu haydovchi hali javobi bo'lmagan, hali ochiq (SEARCHING) so'rovlarga
+        # "kech qo'shiladi" — aks holda so'rov yaratilgan paytda oflayn bo'lgan
+        # (yoki keyinroq onlaynga o'tgan) haydovchi bu so'rovni abadiy ko'rmay
+        # qolardi, chunki DriverResponse faqat yaratilish daqiqasida online
+        # bo'lganlar uchun qo'shiladi (requests.py: create_request).
+        already = {
+            row[0]
+            for row in db.query(DriverResponse.request_id).filter(DriverResponse.driver_id == driver.id)
+        }
+        open_reqs = db.query(TripRequest).filter(TripRequest.status == "SEARCHING").all()
+        now = datetime.utcnow()
+        for req in open_reqs:
+            if req.id in already:
+                continue
+            if req.expires_at and req.expires_at < now:
+                continue
+            db.add(DriverResponse(request_id=req.id, driver_id=driver.id, status="PENDING"))
+        db.commit()
 
-    # Bu haydovchi hali javobi bo'lmagan, hali ochiq (SEARCHING) so'rovlarga
-    # "kech qo'shiladi" — aks holda so'rov yaratilgan paytda oflayn bo'lgan
-    # (yoki keyinroq onlaynga o'tgan) haydovchi bu so'rovni abadiy ko'rmay
-    # qolardi, chunki DriverResponse faqat yaratilish daqiqasida online
-    # bo'lganlar uchun qo'shiladi (requests.py: create_request).
-    already = {
-        row[0]
-        for row in db.query(DriverResponse.request_id).filter(DriverResponse.driver_id == driver.id)
-    }
-    open_reqs = db.query(TripRequest).filter(TripRequest.status == "SEARCHING").all()
-    now = datetime.utcnow()
-    for req in open_reqs:
-        if req.id in already:
-            continue
-        if req.expires_at and req.expires_at < now:
-            continue
-        db.add(DriverResponse(request_id=req.id, driver_id=driver.id, status="PENDING"))
-    db.commit()
-
+    allowed = ["ACCEPTED", "SELECTED", "CONFIRMED"]
+    if driver.is_online:
+        allowed.append("PENDING")
     resp_ids = db.query(DriverResponse.request_id).filter(
         DriverResponse.driver_id == driver.id,
-        DriverResponse.status.in_(["PENDING", "ACCEPTED", "SELECTED", "CONFIRMED"]),
+        DriverResponse.status.in_(allowed),
     )
     rows = (
         db.query(TripRequest)
