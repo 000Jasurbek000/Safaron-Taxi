@@ -508,7 +508,8 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                         var forceDuplicate = false;
                         if (ActiveBookingService.instance.hasSameRoute(bookTaxi.from, bookTaxi.to)) {
                           forceDuplicate = await showDuplicateRouteDialog(context);
-                          if (!forceDuplicate || !context.mounted) {
+                          if (!context.mounted) return;
+                          if (!forceDuplicate) {
                             setState(() => _confirming = false);
                             return;
                           }

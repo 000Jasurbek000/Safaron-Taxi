@@ -137,6 +137,58 @@ async def apply_driver(
     return user_out(user)
 
 
+@router.post("/me/vehicle", response_model=UserOut)
+async def update_vehicle(
+    model_name: str = Form(...),
+    plate: str = Form(...),
+    seats: int = Form(...),
+    color: str | None = Form(None),
+    vehicle_photo: UploadFile | None = File(None),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    driver = db.query(DriverProfile).filter(DriverProfile.user_id == user.id).first()
+    if not driver or driver.status != "APPROVED":
+        raise HTTPException(403, "Faqat tasdiqlangan haydovchilar mashina ma'lumotlarini o'zgartirishi mumkin.")
+    model = model_name.strip()
+    if len(model) < 2:
+        raise HTTPException(400, "Mashina nomini kiriting.")
+    if not validate_plate(plate):
+        raise HTTPException(400, "Davlat raqami noto‘g‘ri. Namuna: 00 A 000 AA yoki 00 000 AAA.")
+    plate_n = normalize_plate(plate)
+    if seats < 1 or seats > 10:
+        raise HTTPException(400, "Yo‘lovchi sig‘imi noto‘g‘ri (1–10).")
+
+    vehicle = db.query(Vehicle).filter(Vehicle.driver_id == driver.id).first()
+    existing_plate = (
+        db.query(Vehicle)
+        .join(DriverProfile, DriverProfile.id == Vehicle.driver_id)
+        .join(User, User.id == DriverProfile.user_id)
+        .filter(Vehicle.plate == plate_n, User.deleted_at.is_(None))
+        .first()
+    )
+    if existing_plate and (not vehicle or existing_plate.id != vehicle.id):
+        raise HTTPException(400, "Bu davlat raqami allaqachon ro‘yxatdan o‘tgan.")
+
+    photo_path = None
+    if vehicle_photo is not None and (vehicle_photo.filename or "").strip():
+        photo_path = await _save_upload(vehicle_photo, "vehicles")
+
+    if vehicle is None:
+        vehicle = Vehicle(driver_id=driver.id, model_name=model, plate=plate_n, seats=seats, photo_path=photo_path, color=color)
+        db.add(vehicle)
+    else:
+        vehicle.model_name = model
+        vehicle.plate = plate_n
+        vehicle.seats = seats
+        vehicle.color = color
+        if photo_path:
+            vehicle.photo_path = photo_path
+    db.commit()
+    user = db.query(User).options(joinedload(User.driver_profile)).filter(User.id == user.id).one()
+    return user_out(user)
+
+
 @router.post("/online", response_model=OkResponse)
 def set_online(body: OnlineIn, driver: DriverProfile = Depends(get_approved_driver), db: Session = Depends(get_db)):
     driver.is_online = body.is_online

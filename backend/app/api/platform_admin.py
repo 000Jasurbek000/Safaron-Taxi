@@ -182,7 +182,7 @@ def bonuses(status: str = "PENDING", q: str = "", page: int = 1, admin: AdminUse
 
 @router.post("/bonuses/{tx_id}/approve")
 def approve(tx_id: int, request: Request, admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
-    tx = db.get(BonusTransaction, tx_id)
+    tx = db.get(BonusTransaction, tx_id, with_for_update=True)
     if not tx:
         raise HTTPException(404, "Topilmadi")
     approve_bonus(db, tx, admin.id, True, None)
@@ -193,7 +193,7 @@ def approve(tx_id: int, request: Request, admin: AdminUser = Depends(get_current
 
 @router.post("/bonuses/{tx_id}/reject")
 def reject_bonus(tx_id: int, body: NoteIn, request: Request, admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
-    tx = db.get(BonusTransaction, tx_id)
+    tx = db.get(BonusTransaction, tx_id, with_for_update=True)
     if not tx:
         raise HTTPException(404, "Topilmadi")
     approve_bonus(db, tx, admin.id, False, body.note)
@@ -228,7 +228,7 @@ def withdrawals(status: str = "PENDING", page: int = 1, admin: AdminUser = Depen
 
 @router.post("/withdrawals/{wid}/{action}")
 def withdrawal_action(wid: int, action: str, body: NoteIn, request: Request, admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
-    row = db.get(WithdrawalRequest, wid)
+    row = db.get(WithdrawalRequest, wid, with_for_update=True)
     if not row:
         raise HTTPException(404, "Topilmadi")
     before = row.status

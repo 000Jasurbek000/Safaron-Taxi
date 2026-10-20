@@ -3,8 +3,26 @@ import '../../l10n/phrase.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../l10n/app_strings.dart';
+import '../../services/api_client.dart';
 import '../../services/profile_service.dart';
 import '../../theme/app_colors.dart';
+
+Future<void> _applyRole(BuildContext context, ProfileService profile, AppRole role) async {
+  try {
+    await profile.setRole(role);
+    if (context.mounted) Navigator.pop(context);
+  } on ApiException catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(tr('Server bilan bog‘lanib bo‘lmadi. Keyinroq urinib ko‘ring.'))),
+      );
+    }
+  }
+}
 
 Future<void> showRoleSelectSheet(BuildContext context) async {
   final profile = ProfileService.instance;
@@ -39,10 +57,7 @@ Future<void> showRoleSelectSheet(BuildContext context) async {
               title: AppStrings.t('passenger'),
               subtitle: tr('Taksi buyurtma qiling'),
               selected: profile.role == AppRole.passenger,
-              onTap: () async {
-                await profile.setRole(AppRole.passenger);
-                if (context.mounted) Navigator.pop(context);
-              },
+              onTap: () => _applyRole(context, profile, AppRole.passenger),
             ),
             const SizedBox(height: 8),
             _RoleOption(
@@ -50,10 +65,7 @@ Future<void> showRoleSelectSheet(BuildContext context) async {
               title: AppStrings.t('driver'),
               subtitle: tr('Safarlarni qabul qiling'),
               selected: profile.role == AppRole.driver,
-              onTap: () async {
-                await profile.setRole(AppRole.driver);
-                if (context.mounted) Navigator.pop(context);
-              },
+              onTap: () => _applyRole(context, profile, AppRole.driver),
             ),
           ],
         ),

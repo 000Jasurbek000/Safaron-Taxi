@@ -62,6 +62,22 @@ class _DriverPersonalInfoScreenState extends State<DriverPersonalInfoScreen> {
       );
       return;
     }
+    // Ism/familiya tuzatilgan bo'lsa serverga ham yozamiz — aks holda bu
+    // yerdagi tuzatish faqat shu qurilmada qolib, keyingi syncFromAuth()
+    // chaqirilganda (masalan arizani yuborgandan keyin "Yangilash" bosilganda)
+    // eski server qiymati bilan almashtirilib ketardi.
+    if (AuthService.instance.registered &&
+        (_first.text.trim() != AuthService.instance.user?.firstName ||
+            _last.text.trim() != AuthService.instance.user?.lastName)) {
+      try {
+        await AuthService.instance.updateProfile(
+          firstName: _first.text,
+          lastName: _last.text,
+        );
+      } catch (_) {
+        // Best-effort — tarmoq xatosi ariza bosqichini to'xtatmasin.
+      }
+    }
     await _profile.savePersonal(
       firstName: _first.text,
       lastName: _last.text,

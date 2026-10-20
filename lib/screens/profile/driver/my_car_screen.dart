@@ -90,7 +90,7 @@ class _MyCarScreenState extends State<MyCarScreen> {
     final plate = PlateUz.display(
       PlateUz.normalize(_region.text, _midLetter.text, _digits.text, _endLetters.text),
     );
-    await _profile.saveVehicle(
+    final error = await _profile.saveVehicle(
       carName: CarModelPicker.resolve(_carName, _customCar.text),
       plate: plate,
       seats: _seats,
@@ -98,6 +98,12 @@ class _MyCarScreenState extends State<MyCarScreen> {
       carPhotoPath: _photoPath,
     );
     if (!mounted) return;
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
     setState(() => _editing = false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(tr('Saqlangan')), behavior: SnackBarBehavior.floating),

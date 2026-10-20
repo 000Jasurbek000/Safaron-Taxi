@@ -14,14 +14,18 @@ from app.models import (
     BonusRule,
     BonusTransaction,
     BonusWallet,
+    DriverProfile,
     FeatureFlag,
     FraudEvent,
     FraudRule,
     Notification,
     Referral,
     SystemSetting,
+    Trip,
+    TripBooking,
     TripCheck,
     TripLocationPoint,
+    TripRequest,
     User,
     UserDevice,
     WithdrawalRequest,
@@ -49,8 +53,15 @@ def setting(db: Session, key: str, default: str) -> str:
     return row.value if row else default
 
 
-def _wallet(db: Session, user_id: int) -> BonusWallet:
-    w = db.query(BonusWallet).filter(BonusWallet.user_id == user_id).first()
+def _wallet(db: Session, user_id: int, *, lock: bool = False) -> BonusWallet:
+    q = db.query(BonusWallet).filter(BonusWallet.user_id == user_id)
+    if lock:
+        # Pul mablag'ini o'zgartiradigan har bir yo'l (withdraw/approve/admin
+        # harakat) qator darajasida qulflanadi — ikkita parallel so'rov bir xil
+        # eski balansni o'qib, bir-birining yozuvini "yo'qotishi" (lost update,
+        # haqiqiy qo'sh-xarajat zaifligi) oldini olish uchun.
+        q = q.with_for_update()
+    w = q.first()
     if w:
         return w
     w = BonusWallet(user_id=user_id, available=0, held=0, lifetime_earned=0)
@@ -193,6 +204,12 @@ def request_withdrawal(db: Session, user: User, telegram: str, amount: int | Non
     nick = telegram.strip().lstrip("@")
     if len(nick) < 3:
         raise HTTPException(400, "Telegram username kiriting.")
+    # Qator qulfini AVVAL olamiz — shunda ikkita parallel so'rov ketma-ket
+    # bajariladi: ikkinchisi birinchisi commit bo'lgunicha kutadi, va shu
+    # vaqtda birinchisi yaratgan "faol so'rov" qatori allaqachon ko'rinadi.
+    # Aks holda ikkisi ham "faol so'rov yo'q" deb bir xil eski balansni o'qib,
+    # ikkisi ham o'tib ketishi mumkin edi (qo'sh-withdrawal zaifligi).
+    w = _wallet(db, user.id, lock=True)
     active = (
         db.query(WithdrawalRequest)
         .filter(WithdrawalRequest.user_id == user.id, WithdrawalRequest.status.in_(("PENDING", "APPROVED")))
@@ -200,7 +217,6 @@ def request_withdrawal(db: Session, user: User, telegram: str, amount: int | Non
     )
     if active:
         raise HTTPException(400, "Sizda faol withdrawal so‘rovi mavjud.")
-    w = _wallet(db, user.id)
     if w.available <= 0:
         raise HTTPException(400, "Sizda yechib olish uchun bonus mablag‘i mavjud emas.")
     take = amount or w.available
@@ -228,7 +244,7 @@ def request_withdrawal(db: Session, user: User, telegram: str, amount: int | Non
 
 
 def admin_withdrawal(db: Session, req: WithdrawalRequest, action: str, note: str | None, admin_id: int) -> None:
-    w = _wallet(db, req.user_id)
+    w = _wallet(db, req.user_id, lock=True)
     if action == "approve" and req.status == "PENDING":
         req.status = "APPROVED"
     elif action == "paid" and req.status in ("PENDING", "APPROVED"):
@@ -284,6 +300,44 @@ def _rule_float(db: Session, key: str, default: float) -> float:
         return default
 
 
+def _resolve_booking_participants(db: Session, local_booking_id: str) -> tuple[int, int | None] | None:
+    """`inst_<id>` / `req_<id>` ko‘rinishidagi haqiqiy booking/request yozuvidan
+    haqiqiy ishtirokchilarni (passenger_user_id, driver_user_id) topadi.
+    Mos yozuv topilmasa (yoki ID formati noma’lum bo‘lsa) None qaytaradi —
+    bu holda chaqiruvchi so‘rovni butunlay rad etadi. Mijoz tomonidan
+    yuborilgan driver_user_id/passenger_user_id'ga hech qachon ishonilmaydi,
+    aks holda haqiqiy safar bo‘lmasa ham xayoliy GPS nuqtalari bilan bonus
+    "ishlab olish" mumkin bo‘lardi."""
+    if local_booking_id.startswith("inst_"):
+        try:
+            booking_id = int(local_booking_id[len("inst_"):])
+        except ValueError:
+            return None
+        booking = db.get(TripBooking, booking_id)
+        if not booking:
+            return None
+        driver_user_id = None
+        trip = db.get(Trip, booking.trip_id)
+        if trip:
+            dp = db.get(DriverProfile, trip.driver_id)
+            driver_user_id = dp.user_id if dp else None
+        return booking.passenger_id, driver_user_id
+    if local_booking_id.startswith("req_"):
+        try:
+            request_id = int(local_booking_id[len("req_"):])
+        except ValueError:
+            return None
+        req = db.get(TripRequest, request_id)
+        if not req:
+            return None
+        driver_user_id = None
+        if req.selected_driver_id:
+            dp = db.get(DriverProfile, req.selected_driver_id)
+            driver_user_id = dp.user_id if dp else None
+        return req.passenger_id, driver_user_id
+    return None
+
+
 def record_gps(db: Session, user: User, body: dict) -> TripCheck:
     booking = str(body.get("local_booking_id") or "")
     if not booking:
@@ -298,8 +352,15 @@ def record_gps(db: Session, user: User, body: dict) -> TripCheck:
     min_acc = _rule_float(db, "gps_min_accuracy_m", 80)
     if acc is not None and float(acc) > min_acc:
         raise HTTPException(400, "Joylashuv aniqligi yetarli emas. Iltimos, GPS signalini yaxshilang.")
-    driver_id = body.get("driver_user_id")
-    if driver_id and int(driver_id) == user.id and role == "passenger":
+    resolved = _resolve_booking_participants(db, booking)
+    if resolved is None:
+        raise HTTPException(400, "Safar topilmadi.")
+    real_passenger_id, driver_id = resolved
+    if role == "passenger" and user.id != real_passenger_id:
+        raise HTTPException(403, "Bu safarga ruxsatingiz yo‘q.")
+    if role == "driver" and user.id != driver_id:
+        raise HTTPException(403, "Bu safarga ruxsatingiz yo‘q.")
+    if driver_id and role == "passenger" and driver_id == user.id:
         raise HTTPException(400, "Bir qurilmada o‘z safaringizni o‘zingiz qabul qila olmaysiz.")
     check = (
         db.query(TripCheck)
@@ -309,8 +370,8 @@ def record_gps(db: Session, user: User, body: dict) -> TripCheck:
     if check is None:
         check = TripCheck(
             local_booking_id=booking,
-            passenger_user_id=user.id if role == "passenger" else int(body.get("passenger_user_id") or user.id),
-            driver_user_id=int(driver_id) if driver_id else (user.id if role == "driver" else None),
+            passenger_user_id=real_passenger_id,
+            driver_user_id=driver_id,
             status="REQUESTED",
             device_id=body.get("device_id"),
         )
@@ -357,6 +418,10 @@ def record_gps(db: Session, user: User, body: dict) -> TripCheck:
 
 
 def _finish_check(db: Session, check: TripCheck) -> None:
+    if check.status in ("VERIFIED", "FRAUD_REVIEW", "CANCELLED"):
+        # Allaqachon yakunlangan tekshiruv — takroriy/qaytarilgan "END" so'rovi
+        # bonusni yoki verified_trip_count'ni ikkinchi marta bermasligi kerak.
+        return
     points = db.query(TripLocationPoint).filter(TripLocationPoint.trip_check_id == check.id).all()
     starts = [p for p in points if p.phase == "START"]
     ends = [p for p in points if p.phase == "END"]
@@ -441,7 +506,7 @@ def approve_bonus(db: Session, tx: BonusTransaction, admin_id: int, ok: bool, no
         db.add(Notification(user_id=tx.user_id, title="Bonus rad etildi", body=note or "Bonus tasdiqlanmadi.", type="bonus"))
         return
     tx.status = "APPROVED"
-    w = _wallet(db, tx.user_id)
+    w = _wallet(db, tx.user_id, lock=True)
     w.available += tx.amount
     w.lifetime_earned += tx.amount
     if tx.related_referral_id:

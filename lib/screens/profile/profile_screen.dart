@@ -1,5 +1,6 @@
 import '../../l10n/phrase.dart';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -933,6 +934,11 @@ class _AboutScreenState extends State<_AboutScreen> {
   }
 
   void _onLogoTap() {
+    // Server manzilini o'zgartirish faqat debug build'larda ochiladi —
+    // aks holda production'dagi har qanday foydalanuvchi API trafigini
+    // ixtiyoriy serverga yo'naltirib qo'yishi mumkin edi (login/OTP/token
+    // kabi maxfiy ma'lumotlar xavfi).
+    if (!kDebugMode) return;
     _logoTaps++;
     if (_logoTaps >= 7) {
       _logoTaps = 0;

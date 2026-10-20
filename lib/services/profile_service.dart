@@ -86,18 +86,18 @@ class ProfileService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Rolni serverga yozadi. Agar tarmoq/server xatosi bo'lsa istisno
+  /// tashlanadi va mahalliy rol O'ZGARMAYDI — aks holda foydalanuvchi
+  /// "haydovchi" rejimida ko'rinib, server eski rolni saqlab qolardi va
+  /// keyingi kirishda tushuntirishsiz asl holatiga qaytib ketardi.
   Future<void> setRole(AppRole value) async {
     if (value == AppRole.driver && driverStatus != DriverStatus.approved) {
       role = AppRole.passenger;
       notifyListeners();
       return;
     }
-    try {
-      await AuthService.instance.setRole(value == AppRole.driver ? 'driver' : 'passenger');
-      role = value;
-    } catch (_) {
-      role = value;
-    }
+    await AuthService.instance.setRole(value == AppRole.driver ? 'driver' : 'passenger');
+    role = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kRole, role == AppRole.driver ? 'driver' : 'passenger');
     notifyListeners();
@@ -155,15 +155,40 @@ class ProfileService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> saveVehicle({
+  /// Mashina ma'lumotlarini serverga yozadi (tasdiqlangan haydovchilar uchun),
+  /// so'ng mahalliy nusxani yangilaydi. Xato bo'lsa xabar qaytaradi va
+  /// mahalliy holatni O'ZGARTIRMAYDI — aks holda UI "Saqlangan" deb ko'rsatib,
+  /// server esa eski ma'lumotni saqlab qolardi (boshqa qurilma/qayta o'rnatish
+  /// paytida haydovchining haqiqiy tahriri yo'qolib ketardi).
+  Future<String?> saveVehicle({
     required String carName,
     required String plate,
     required int seats,
     required bool hasCarPhoto,
     String? carPhotoPath,
   }) async {
-    this.carName = carName.trim();
-    this.plate = plate.trim();
+    final trimmedName = carName.trim();
+    final trimmedPlate = plate.trim();
+    if (AuthService.instance.registered && isApprovedDriver) {
+      try {
+        final newPhoto = carPhotoPath != null && carPhotoPath != this.carPhotoPath ? carPhotoPath : null;
+        await ApiClient.instance.postMultipart(
+          '/api/drivers/me/vehicle',
+          fields: {
+            'model_name': trimmedName,
+            'plate': trimmedPlate,
+            'seats': '$seats',
+          },
+          files: newPhoto != null ? {'vehicle_photo': newPhoto} : {},
+        );
+      } on ApiException catch (e) {
+        return e.message;
+      } catch (_) {
+        return 'Server bilan bog‘lanib bo‘lmadi. Keyinroq urinib ko‘ring.';
+      }
+    }
+    this.carName = trimmedName;
+    this.plate = trimmedPlate;
     this.seats = seats;
     this.hasCarPhoto = hasCarPhoto;
     if (carPhotoPath != null) {
@@ -178,6 +203,7 @@ class ProfileService extends ChangeNotifier {
       await prefs.setString(_kCarPhotoPath, this.carPhotoPath);
     }
     notifyListeners();
+    return null;
   }
 
   Future<void> submitApplication() async {
