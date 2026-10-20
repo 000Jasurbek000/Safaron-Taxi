@@ -12,6 +12,7 @@ class PlatformConfigService extends ChangeNotifier {
   bool bonus = true;
   bool referral = true;
   bool withdrawal = true;
+  bool smsOtpEnabled = false;
   String maintenanceMessage = 'Safaron texnik xizmat ko‘rsatish rejimida.';
   String latestVersion = '1.1.0';
   String minimumVersion = '1.0.0';
@@ -37,6 +38,7 @@ class PlatformConfigService extends ChangeNotifier {
       bonus = map['bonus_enabled'] != false && flags['bonus'] != false;
       referral = map['referral_enabled'] != false && flags['referral'] != false;
       withdrawal = map['withdrawal_enabled'] != false && flags['withdrawal'] != false;
+      smsOtpEnabled = map['sms_otp_enabled'] == true || flags['sms_otp'] == true;
       maintenanceMessage = map['maintenance_message'] as String? ?? maintenanceMessage;
       latestVersion = map['latest_version'] as String? ?? latestVersion;
       minimumVersion = map['minimum_version'] as String? ?? minimumVersion;

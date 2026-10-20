@@ -181,6 +181,40 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// SMS orqali kirish — 1-qadam: kod yuboradi. Server `message`ida
+  /// (hozircha SMS provayder ulanmagani uchun, faqat sozlama yoqilgan
+  /// paytda) kodni ham qaytaradi — shuning uchun UI kod maydonini
+  /// to'ldirib ko'rsatishi mumkin.
+  Future<String> sendOtp(String phone) async {
+    final data = await ApiClient.instance.post('/api/auth/otp/send', body: {'phone': phone});
+    final map = data as Map<String, dynamic>;
+    return map['message'] as String? ?? '';
+  }
+
+  /// SMS orqali kirish — 2-qadam: kodni tasdiqlaydi.
+  Future<void> verifyOtp({
+    required String phone,
+    required String code,
+    required String firstName,
+    required String lastName,
+    String? referralCode,
+  }) async {
+    final data = await ApiClient.instance.post('/api/auth/otp/verify', body: {
+      'phone': phone,
+      'code': code,
+      'first_name': firstName,
+      'last_name': lastName,
+      if (referralCode != null && referralCode.trim().isNotEmpty) 'referral_code': referralCode.trim(),
+    });
+    final map = data as Map<String, dynamic>;
+    await ApiClient.instance.setToken(map['access_token'] as String);
+    user = AuthUser.fromJson(map['user'] as Map<String, dynamic>);
+    registered = true;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kRegistered, true);
+    notifyListeners();
+  }
+
   bool _isConnectionError(ApiException e) {
     final m = e.message.toLowerCase();
     return m.contains('ulanib bo‘lmadi') ||

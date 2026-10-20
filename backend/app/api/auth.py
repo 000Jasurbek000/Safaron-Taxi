@@ -10,7 +10,7 @@ from app.models import OtpCode, User
 from app.schemas import OkResponse, PhoneLookupOut, SendOtpIn, SendOtpOut, SignInIn, TokenResponse, UserOut, VerifyOtpIn
 from app.security import create_access_token
 from app.services.phone import normalize_phone, validate_name
-from app.services.rewards import attach_referral, ensure_code
+from app.services.rewards import attach_referral, ensure_code, flag_on
 from app.services.serializers import user_out
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -18,6 +18,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/otp/send", response_model=SendOtpOut)
 def send_otp(body: SendOtpIn, db: Session = Depends(get_db)):
+    if not flag_on(db, "sms_otp"):
+        raise HTTPException(400, "SMS orqali kirish hozircha o‘chirilgan.")
     phone = normalize_phone(body.phone)
     if not phone:
         raise HTTPException(400, "Telefon raqami noto‘g‘ri.")
@@ -36,6 +38,8 @@ def send_otp(body: SendOtpIn, db: Session = Depends(get_db)):
 
 @router.post("/otp/verify", response_model=TokenResponse)
 def verify_otp(body: VerifyOtpIn, db: Session = Depends(get_db)):
+    if not flag_on(db, "sms_otp"):
+        raise HTTPException(400, "SMS orqali kirish hozircha o‘chirilgan.")
     phone = normalize_phone(body.phone)
     if not phone:
         raise HTTPException(400, "Telefon raqami noto‘g‘ri.")
@@ -60,6 +64,8 @@ def verify_otp(body: VerifyOtpIn, db: Session = Depends(get_db)):
         user = User(phone=phone, first_name=first, last_name=last)
         db.add(user)
         db.flush()
+        ensure_code(db, user)
+        attach_referral(db, user, body.referral_code)
     elif user.deleted_at is not None:
         # O'chirilgan hisob bilan qayta kirish — qayta faollashtiramiz,
         # aks holda admin panelda "ko'rinmas" foydalanuvchi bo'lib qoladi.

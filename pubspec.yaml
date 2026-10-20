@@ -2,7 +2,7 @@ name: safaron
 description: "SAFARON TAXI — mini taksi ilovasi"
 publish_to: 'none'
 
-version: 1.2.2+16
+version: 1.2.3+17
 
 environment:
   sdk: ^3.11.5

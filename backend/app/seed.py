@@ -145,6 +145,7 @@ def seed(db: Session) -> None:
         ("passenger_mode", True, "Yo‘lovchi rejimi"),
         ("notifications", True, "Bildirishnomalar"),
         ("maintenance", False, "Texnik rejim"),
+        ("sms_otp", False, "SMS orqali tasdiqlash (OTP) — o'chirilgan bo'lsa, telefon+ism bilan to'g'ridan-to'g'ri kiriladi"),
     ]
     for key, enabled, desc in flags:
         if not db.query(FeatureFlag).filter(FeatureFlag.key == key).first():

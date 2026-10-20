@@ -108,6 +108,7 @@ def public_config(db: Session) -> dict:
         "bonus_enabled": flags.get("bonus", True),
         "referral_enabled": flags.get("referral", True),
         "withdrawal_enabled": flags.get("withdrawal", True),
+        "sms_otp_enabled": flags.get("sms_otp", False),
         "withdrawal_min": int(setting(db, "withdrawal_min", "10000") or "10000"),
         "vehicle_models": [
             s.strip()
