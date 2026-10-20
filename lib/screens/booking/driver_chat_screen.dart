@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../l10n/phrase.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,6 +9,7 @@ import '../../services/chat_service.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/app_ui.dart';
 import '../../widgets/nav_actions.dart';
+import '../../widgets/smart_photo.dart';
 
 class DriverChatScreen extends StatefulWidget {
   const DriverChatScreen({super.key, required this.taxi, this.asDriver = false, this.peerName});
@@ -23,12 +26,19 @@ class _DriverChatScreenState extends State<DriverChatScreen> {
   final _controller = TextEditingController();
   final _scroll = ScrollController();
   final _chat = ChatService.instance;
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     _chat.ensureThread(widget.taxi);
     _chat.addListener(_onChange);
+    // ignore: unawaited_futures
+    _chat.syncFromServer(widget.taxi.id);
+    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      // ignore: unawaited_futures
+      _chat.syncFromServer(widget.taxi.id);
+    });
   }
 
   void _onChange() {
@@ -46,6 +56,7 @@ class _DriverChatScreenState extends State<DriverChatScreen> {
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _chat.removeListener(_onChange);
     _controller.dispose();
     _scroll.dispose();
@@ -66,9 +77,11 @@ class _DriverChatScreenState extends State<DriverChatScreen> {
   @override
   Widget build(BuildContext context) {
     final taxi = widget.taxi;
+    final thread = _chat.ensureThread(taxi);
     final messages = _chat.messagesFor(taxi.id, asDriver: widget.asDriver);
     final titleName = widget.asDriver ? (widget.peerName ?? tr('Yo‘lovchi')) : taxi.driverName;
     final subtitle = widget.asDriver ? tr('Yo‘lovchi bilan chat') : '${taxi.plate} · ${taxi.phone}';
+    final avatarSrc = widget.asDriver ? thread.passengerPhoto : thread.driverPhoto;
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -81,13 +94,12 @@ class _DriverChatScreenState extends State<DriverChatScreen> {
         ),
         title: Row(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.asset(
-                taxi.imageAsset.isEmpty ? 'assets/images/car_cobalt.png' : taxi.imageAsset,
+            ClipOval(
+              child: SmartPhoto(
+                src: avatarSrc,
+                fallback: 'assets/images/driver_avatar.png',
                 width: 40,
                 height: 40,
-                fit: BoxFit.cover,
               ),
             ),
             const SizedBox(width: 10),

@@ -28,11 +28,18 @@ class TripConfirmedScreen extends StatelessWidget {
     if (reason == null || !context.mounted) return;
     final b = ActiveBookingService.instance.prebookBooking;
     if (b != null) {
-      await TripCancelService.instance.cancelByPassenger(
+      final err = await TripCancelService.instance.cancelByPassenger(
         bookingId: b.id,
         reason: reason,
         kind: BookingKind.prebook,
       );
+      if (!context.mounted) return;
+      if (err != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(err), behavior: SnackBarBehavior.floating),
+        );
+        return;
+      }
     }
     if (!context.mounted) return;
     goToHome(context);

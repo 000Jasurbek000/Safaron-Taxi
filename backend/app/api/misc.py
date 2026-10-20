@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import get_current_user, get_optional_user
-from app.models import Message, Notification, Rating, TripRequest, User, DriverProfile
+from app.models import DriverProfile, Message, Notification, Rating, Trip, TripBooking, TripRequest, User
 from app.schemas import ClientErrorIn, MessageIn, MessageOut, NotificationOut, OkResponse, RatingIn
 from app.services.error_log import log_error
 
@@ -90,6 +90,24 @@ def send_message(body: MessageIn, user: User = Depends(get_current_user), db: Se
         ok = req.passenger_id == user.id or (driver and req.selected_driver_id == driver.id)
         if not ok:
             raise HTTPException(403, "Bu chatga kirish huquqingiz yo‘q.")
+    elif body.trip_id:
+        trip = db.get(Trip, body.trip_id)
+        if not trip:
+            raise HTTPException(404, "Safar topilmadi.")
+        driver = db.query(DriverProfile).filter(DriverProfile.user_id == user.id).first()
+        is_owner_driver = driver is not None and trip.driver_id == driver.id
+        has_live_booking = (
+            db.query(TripBooking)
+            .filter(
+                TripBooking.trip_id == trip.id,
+                TripBooking.passenger_id == user.id,
+                TripBooking.status.in_(["CONFIRMED", "DRIVER_ON_WAY", "PASSENGER_PICKED", "COMPLETED"]),
+            )
+            .first()
+            is not None
+        )
+        if not is_owner_driver and not has_live_booking:
+            raise HTTPException(403, "Bu chatga kirish huquqingiz yo‘q.")
     msg = Message(
         sender_id=user.id,
         receiver_id=body.receiver_id,
@@ -116,10 +134,18 @@ def send_message(body: MessageIn, user: User = Depends(get_current_user), db: Se
 
 
 @router.get("/messages", response_model=list[MessageOut])
-def list_messages(request_id: int | None = None, peer_id: int | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_messages(
+    request_id: int | None = None,
+    trip_id: int | None = None,
+    peer_id: int | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     q = db.query(Message).filter((Message.sender_id == user.id) | (Message.receiver_id == user.id))
     if request_id:
         q = q.filter(Message.request_id == request_id)
+    if trip_id:
+        q = q.filter(Message.trip_id == trip_id)
     if peer_id:
         q = q.filter(((Message.sender_id == user.id) & (Message.receiver_id == peer_id)) | ((Message.sender_id == peer_id) & (Message.receiver_id == user.id)))
     rows = q.order_by(Message.created_at.asc()).limit(200).all()
@@ -145,6 +171,10 @@ def rate(body: RatingIn, user: User = Depends(get_current_user), db: Session = D
         if not req or req.status != "COMPLETED":
             raise HTTPException(400, "Faqat yakunlangan safarni baholash mumkin.")
         exists = db.query(Rating).filter(Rating.request_id == body.request_id, Rating.from_user_id == user.id).first()
+        if exists:
+            raise HTTPException(400, "Siz allaqachon baho bergansiz.")
+    elif body.trip_id:
+        exists = db.query(Rating).filter(Rating.trip_id == body.trip_id, Rating.from_user_id == user.id).first()
         if exists:
             raise HTTPException(400, "Siz allaqachon baho bergansiz.")
     rating = Rating(

@@ -69,9 +69,10 @@ class _DriverOnWayScreenState extends State<DriverOnWayScreen> {
   Future<void> _cancel() async {
     final reason = await showCancelReasonSheet(context);
     if (reason == null || !mounted) return;
+    String? err;
     final id = _booking?.id;
     if (id != null) {
-      await TripCancelService.instance.cancelByPassenger(
+      err = await TripCancelService.instance.cancelByPassenger(
         bookingId: id,
         reason: reason,
         kind: BookingKind.instant,
@@ -79,7 +80,7 @@ class _DriverOnWayScreenState extends State<DriverOnWayScreen> {
     } else {
       final b = ActiveBookingService.instance.instantBooking;
       if (b != null) {
-        await TripCancelService.instance.cancelByPassenger(
+        err = await TripCancelService.instance.cancelByPassenger(
           bookingId: b.id,
           reason: reason,
           kind: BookingKind.instant,
@@ -87,6 +88,12 @@ class _DriverOnWayScreenState extends State<DriverOnWayScreen> {
       }
     }
     if (!mounted) return;
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
     goToHome(context);
   }
 
@@ -136,7 +143,7 @@ class _DriverOnWayScreenState extends State<DriverOnWayScreen> {
     final err = await ActiveBookingService.instance.complete(
       id,
       completedBy: TripCompletedBy.passenger,
-      passengerRatedDriver: true,
+      passengerStars: stars,
     );
     if (!mounted) return;
     if (err != null) {

@@ -10,6 +10,7 @@ import 'place_registry_service.dart';
 import '../models/taxi_offer.dart';
 import '../screens/booking/prebook_screen.dart';
 import '../services/api_client.dart';
+import '../services/chat_service.dart';
 import '../services/driver_trip_service.dart';
 import '../services/auth_service.dart';
 import '../services/profile_service.dart';
@@ -193,12 +194,19 @@ class ActiveBooking {
         'plate': t.plate,
         'phone': t.phone,
         'imageAsset': t.imageAsset,
+        'driverPhoto': t.driverPhoto,
+        if (t.driverUserId != null) 'driverUserId': t.driverUserId,
+        if (t.remoteTripId != null) 'remoteTripId': t.remoteTripId,
         'period': t.period.name,
         'badge': t.badge,
+        'duration': t.duration,
+        'distance': t.distance,
+        'prebookOnly': t.prebookOnly,
         'etaMinutes': t.etaMinutes,
         'isOnline': t.isOnline,
         'fromAliases': t.fromAliases,
         'toAliases': t.toAliases,
+        if (t.avgResponseSec != null) 'avgResponseSec': t.avgResponseSec,
       };
 
   static TaxiOffer _taxiFromJson(Map<String, dynamic> j) => TaxiOffer(
@@ -215,12 +223,19 @@ class ActiveBooking {
         plate: j['plate'] as String,
         phone: j['phone'] as String,
         imageAsset: j['imageAsset'] as String,
+        driverPhoto: j['driverPhoto'] as String? ?? '',
+        driverUserId: j['driverUserId'] as int?,
+        remoteTripId: j['remoteTripId'] as int?,
         period: TimeOfDayFilter.values.byName(j['period'] as String),
         badge: j['badge'] as String?,
+        duration: j['duration'] as String? ?? '',
+        distance: j['distance'] as String? ?? '',
+        prebookOnly: j['prebookOnly'] as bool? ?? false,
         etaMinutes: j['etaMinutes'] as int? ?? 12,
         isOnline: j['isOnline'] as bool? ?? true,
         fromAliases: (j['fromAliases'] as List?)?.cast<String>() ?? const [],
         toAliases: (j['toAliases'] as List?)?.cast<String>() ?? const [],
+        avgResponseSec: j['avgResponseSec'] as int?,
       );
 
   static Map<String, dynamic> _prebookToJson(PrebookRequest r) => {
@@ -670,6 +685,7 @@ class ActiveBookingService extends ChangeNotifier {
           b,
     ];
     await _persist();
+    ChatService.instance.ensureThread(taxi);
     notifyListeners();
   }
 
@@ -693,6 +709,7 @@ class ActiveBookingService extends ChangeNotifier {
           b,
     ];
     await _persist();
+    ChatService.instance.ensureThread(taxi);
     notifyListeners();
   }
 
@@ -794,11 +811,14 @@ class ActiveBookingService extends ChangeNotifier {
   }
 
   /// Natija: muvaffaqiyatda `null`, serverdan xato kelsa xabar matni.
+  /// `passengerStars` berilsa — haydovchining haqiqiy user id'si ma'lum
+  /// bo'lsa, baho serverga (`RatingApi`) ham yuboriladi.
   Future<String?> complete(
     String bookingId, {
     TripCompletedBy completedBy = TripCompletedBy.passenger,
     bool driverRatedPassenger = false,
     bool passengerRatedDriver = false,
+    int? passengerStars,
   }) async {
     final booking = byId(bookingId);
     final remoteId = _parseRemoteBookingId(bookingId);
@@ -813,6 +833,20 @@ class ActiveBookingService extends ChangeNotifier {
     }
     await markBookingCompleted(bookingId);
     if (booking != null) {
+      var ratedDriver = passengerRatedDriver;
+      if (passengerStars != null) {
+        ratedDriver = true;
+        final toUserId = booking.taxi.driverUserId;
+        if (toUserId != null) {
+          try {
+            await RatingApi.instance.rate(
+              toUserId: toUserId,
+              stars: passengerStars,
+              tripId: booking.taxi.remoteTripId,
+            );
+          } catch (_) {}
+        }
+      }
       await TripCompletionService.instance.recordCompletion(
         bookingId: bookingId,
         from: booking.from,
@@ -824,7 +858,7 @@ class ActiveBookingService extends ChangeNotifier {
             : ProfileService.instance.fullName,
         driverName: booking.taxi.driverName,
         driverRatedPassenger: driverRatedPassenger,
-        passengerRatedDriver: passengerRatedDriver,
+        passengerRatedDriver: ratedDriver,
         driverUserId: booking.taxi.driverUserId,
         passengerUserId: AuthService.instance.user?.id,
         remoteTripId: booking.taxi.remoteTripId,

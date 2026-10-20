@@ -280,6 +280,28 @@ class ProfileService extends ChangeNotifier {
       avatarPath = remoteAvatar;
       await prefs.setString(_kAvatarPath, remoteAvatar);
     }
+    // Mashina/tajriba ma'lumotlari faqat shu qurilmada hali hech qachon
+    // saqlanmagan bo'lsa (masalan qayta o'rnatilgan ilova) serverdan
+    // tiklanadi — aks holda saveVehicle()/savePersonal() orqali qilingan
+    // mahalliy tahrir (ular serverga yozmaydi) har sinxronlashda eskirgan
+    // server qiymati bilan qayta yozilib ketardi.
+    final remoteCarName = u.carModel;
+    if (carName.isEmpty && remoteCarName != null && remoteCarName.isNotEmpty) {
+      carName = remoteCarName;
+      plate = u.plate ?? '';
+      seats = u.carSeats ?? seats;
+      carPhotoPath = u.carPhoto ?? '';
+      experienceYears = u.experienceYears ?? experienceYears;
+      hasCarPhoto = carPhotoPath.isNotEmpty;
+      hasSelfie = avatarPath.isNotEmpty;
+      await prefs.setString(_kCar, carName);
+      await prefs.setString(_kPlate, plate);
+      await prefs.setInt(_kSeats, seats);
+      await prefs.setString(_kCarPhotoPath, carPhotoPath);
+      await prefs.setInt(_kExp, experienceYears);
+      await prefs.setBool(_kHasCarPhoto, hasCarPhoto);
+      await prefs.setBool(_kHasSelfie, hasSelfie);
+    }
     notifyListeners();
   }
 }

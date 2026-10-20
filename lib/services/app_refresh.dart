@@ -8,6 +8,7 @@ import 'place_registry_service.dart';
 import 'platform_config_service.dart';
 import 'profile_service.dart';
 import 'trip_catalog_service.dart';
+import 'trip_completion_service.dart';
 
 /// Bosh sahifa va asosiy tablar uchun pastga tortib yangilash.
 class AppRefresh {
@@ -22,9 +23,11 @@ class AppRefresh {
       _ok(PlatformConfigService.instance.load()),
       _ok(ActiveBookingService.instance.load()),
       _ok(ChatService.instance.load()),
+      _ok(ChatService.instance.syncAllFromServer()),
       _ok(DriverTripService.instance.load()),
       _ok(DriverTripService.instance.syncFromServer()),
       _ok(DriverTripService.instance.pollInbox()),
+      _ok(TripCompletionService.instance.syncFromServer()),
       _ok(_auth()),
     ]);
   }

@@ -18,6 +18,12 @@ class AuthUser {
     this.isOnline,
     this.ratingAvg = 5.0,
     this.avatarPath,
+    this.experienceYears,
+    this.carModel,
+    this.plate,
+    this.carSeats,
+    this.carPhoto,
+    this.carColor,
   });
 
   final int id;
@@ -33,6 +39,12 @@ class AuthUser {
   final bool? isOnline;
   final double ratingAvg;
   final String? avatarPath;
+  final int? experienceYears;
+  final String? carModel;
+  final String? plate;
+  final int? carSeats;
+  final String? carPhoto;
+  final String? carColor;
 
   factory AuthUser.fromJson(Map<String, dynamic> j) => AuthUser(
         id: (j['id'] as num?)?.toInt() ?? 0,
@@ -48,6 +60,12 @@ class AuthUser {
         isOnline: j['is_online'] as bool?,
         ratingAvg: (j['rating_avg'] as num?)?.toDouble() ?? 5.0,
         avatarPath: j['avatar_path'] as String?,
+        experienceYears: j['experience_years'] as int?,
+        carModel: j['car_model'] as String?,
+        plate: j['plate'] as String?,
+        carSeats: j['car_seats'] as int?,
+        carPhoto: j['car_photo'] as String?,
+        carColor: j['car_color'] as String?,
       );
 }
 

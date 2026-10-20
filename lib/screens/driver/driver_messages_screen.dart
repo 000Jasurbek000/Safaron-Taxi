@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/chat_service.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/smart_photo.dart';
 import '../booking/driver_chat_screen.dart';
 
 class DriverMessagesScreen extends StatelessWidget {
@@ -127,10 +128,13 @@ class DriverMessagesScreen extends StatelessWidget {
                             padding: const EdgeInsets.all(12),
                             child: Row(
                               children: [
-                                CircleAvatar(
-                                  radius: 28,
-                                  backgroundColor: AppColors.mintSoft,
-                                  child: Icon(Icons.person_rounded, color: AppColors.primary, size: 30),
+                                ClipOval(
+                                  child: SmartPhoto(
+                                    src: t.passengerPhoto,
+                                    fallback: 'assets/images/driver_avatar.png',
+                                    width: 56,
+                                    height: 56,
+                                  ),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(

@@ -47,16 +47,21 @@ class CounterOfferCard extends StatelessWidget {
     if (booking != null) {
       DriverExclusionService.instance.excludeForTwoHours(booking.taxi.id);
     }
-    await TripCancelService.instance.cancelByPassenger(
+    final err = await TripCancelService.instance.cancelByPassenger(
       bookingId: bookingId,
       reason: tr('Qarshi narx rad etildi'),
     );
-    onRejected?.call();
-    if (context.mounted) {
+    if (!context.mounted) return;
+    if (err != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('Taklif rad etildi. Boshqa haydovchini tanlashingiz mumkin.')), behavior: SnackBarBehavior.floating),
+        SnackBar(content: Text(err), behavior: SnackBarBehavior.floating),
       );
+      return;
     }
+    onRejected?.call();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(tr('Taklif rad etildi. Boshqa haydovchini tanlashingiz mumkin.')), behavior: SnackBarBehavior.floating),
+    );
   }
 
   @override

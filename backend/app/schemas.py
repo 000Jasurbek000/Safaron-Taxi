@@ -68,6 +68,12 @@ class UserOut(BaseModel):
     driver_id: Optional[int] = None
     is_online: Optional[bool] = None
     rating_avg: float = 5.0
+    experience_years: Optional[int] = None
+    car_model: Optional[str] = None
+    plate: Optional[str] = None
+    car_seats: Optional[int] = None
+    car_photo: Optional[str] = None
+    car_color: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -153,6 +159,7 @@ class TripOut(BaseModel):
     price: int
     note: Optional[str] = None
     status: str
+    created_at: datetime
 
 
 class BookTripIn(BaseModel):
@@ -172,12 +179,15 @@ class TripBookingOut(BaseModel):
     picked_up_at: Optional[datetime] = None
     cancelled_by: Optional[str] = None
     cancel_reason: Optional[str] = None
+    cancelled_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     created_at: datetime
     expires_at: Optional[datetime] = None
     trip: TripOut
     passenger_name: str = ""
     passenger_phone: str = ""
     passenger_rating: float = 5.0
+    passenger_photo: Optional[str] = None
 
 
 class RequestCreateIn(BaseModel):

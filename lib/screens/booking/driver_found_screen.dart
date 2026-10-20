@@ -52,11 +52,18 @@ class DriverFoundScreen extends StatelessWidget {
     final b = ActiveBookingService.instance.prebookBooking;
     final id = b?.id ?? (remoteRequestId != null ? 'req_$remoteRequestId' : null);
     if (id != null) {
-      await TripCancelService.instance.cancelByPassenger(
+      final err = await TripCancelService.instance.cancelByPassenger(
         bookingId: id,
         reason: reason,
         kind: BookingKind.prebook,
       );
+      if (!context.mounted) return;
+      if (err != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(err), behavior: SnackBarBehavior.floating),
+        );
+        return;
+      }
     }
     if (!context.mounted) return;
     goToHome(context);

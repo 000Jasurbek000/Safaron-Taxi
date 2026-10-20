@@ -476,7 +476,7 @@ class _OrderCard extends StatelessWidget {
                               final err = await DriverTripService.instance.completeOrder(
                                 order.id,
                                 completedBy: TripCompletedBy.driver,
-                                driverRatedPassenger: true,
+                                driverStars: stars,
                               );
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(

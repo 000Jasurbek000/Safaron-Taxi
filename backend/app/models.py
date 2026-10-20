@@ -212,6 +212,7 @@ class TripBooking(Base):
     cancelled_by: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     cancel_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     trip: Mapped[Trip] = relationship(back_populates="bookings")

@@ -33,6 +33,7 @@ def compute_avg_response_secs(db: Session, driver_ids: list[int]) -> dict[int, i
 
 def user_out(user: User) -> UserOut:
     driver = user.driver_profile
+    vehicle = driver.vehicle if driver else None
     return UserOut(
         id=user.id,
         phone=user.phone,
@@ -48,6 +49,12 @@ def user_out(user: User) -> UserOut:
         driver_id=driver.id if driver else None,
         is_online=driver.is_online if driver else None,
         rating_avg=user.rating_avg,
+        experience_years=driver.experience_years if driver else None,
+        car_model=vehicle.model_name if vehicle else None,
+        plate=vehicle.plate if vehicle else None,
+        car_seats=vehicle.seats if vehicle else None,
+        car_photo=vehicle.photo_path if vehicle else None,
+        car_color=vehicle.color if vehicle else None,
     )
 
 
@@ -84,6 +91,7 @@ def trip_out(
         price=trip.price,
         note=trip.note,
         status=trip.status,
+        created_at=trip.created_at,
     )
 
 
@@ -111,12 +119,15 @@ def booking_out(db: Session, booking: TripBooking) -> TripBookingOut:
         picked_up_at=booking.picked_up_at,
         cancelled_by=booking.cancelled_by,
         cancel_reason=booking.cancel_reason,
+        cancelled_at=booking.cancelled_at,
+        completed_at=booking.completed_at,
         created_at=booking.created_at,
         expires_at=booking.expires_at,
         trip=trip_out_for(db, booking.trip),
         passenger_name=passenger.full_name if passenger else "",
         passenger_phone=passenger.phone if passenger else "",
         passenger_rating=passenger.rating_avg if passenger else 5.0,
+        passenger_photo=passenger.avatar_path if passenger else None,
     )
 
 

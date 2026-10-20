@@ -4,6 +4,9 @@ import '../l10n/phrase.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'auth_service.dart';
+import 'safaron_api.dart';
+
 enum TripCompletedBy { driver, passenger, auto }
 
 enum TripOutcome { completed, cancelled, expired }
@@ -169,6 +172,81 @@ class TripCompletionService extends ChangeNotifier {
     }
     _loaded = true;
     notifyListeners();
+    // ignore: unawaited_futures
+    syncFromServer();
+  }
+
+  /// Serverdagi yakunlangan/bekor qilingan safarlar tarixini mahalliy
+  /// ro'yxatga qo'shadi — faqat hali mahalliyda yo'q yozuvlar (qayta
+  /// o'rnatish, boshqa qurilma yoki qayta login qilishdan keyin bu ro'yxat
+  /// bo'sh boshlanadi, aks holda daromad/tarix doim 0 ko'rinar edi).
+  /// Tiklangan yozuvlar "baholangan" deb belgilanadi — eski safarlar uchun
+  /// baholash dialogini qayta chiqarish noqulay bo'lardi.
+  Future<void> syncFromServer() async {
+    if (!AuthService.instance.registered) return;
+    try {
+      final isDriver = AuthService.instance.user?.driverStatus == 'APPROVED';
+      final myUserId = AuthService.instance.user?.id;
+      final myName = AuthService.instance.user?.fullName ?? '';
+      List<Map<String, dynamic>> rows;
+      if (isDriver) {
+        final earnings = await DriverApi.instance.earnings();
+        rows = ((earnings['recent'] as List?) ?? const []).cast<Map<String, dynamic>>();
+      } else {
+        rows = await TripApi.instance.bookingsMine();
+      }
+      if (rows.isEmpty) return;
+
+      final existingIds = records.map((r) => r.bookingId).toSet();
+      final newOnes = <CompletedTripRecord>[];
+      for (final row in rows) {
+        final bookingId = 'inst_${row['id']}';
+        if (existingIds.contains(bookingId)) continue;
+        final trip = row['trip'] as Map<String, dynamic>?;
+        if (trip == null) continue;
+
+        final outcome = switch (row['status'] as String? ?? '') {
+          'COMPLETED' => TripOutcome.completed,
+          'EXPIRED' => TripOutcome.expired,
+          _ => TripOutcome.cancelled, // CANCELLED, REJECTED
+        };
+        final completedAt = DateTime.tryParse(
+              (row['completed_at'] ?? row['cancelled_at'] ?? row['created_at']) as String? ?? '',
+            ) ??
+            DateTime.now();
+        final price = (row['agreed_price'] as int?) ?? (trip['price'] as int? ?? 0);
+
+        newOnes.add(CompletedTripRecord(
+          bookingId: bookingId,
+          from: trip['from_text'] as String? ?? '',
+          to: trip['to_text'] as String? ?? '',
+          price: price,
+          completedAt: completedAt,
+          completedBy: TripCompletedBy.auto,
+          passengerName: isDriver
+              ? (row['passenger_name'] as String? ?? tr('Yo‘lovchi'))
+              : (myName.isEmpty ? tr('Yo‘lovchi') : myName),
+          driverName: isDriver
+              ? (myName.isEmpty ? 'Haydovchi' : myName)
+              : (trip['driver_name'] as String? ?? 'Haydovchi'),
+          driverRatedPassenger: true,
+          passengerRatedDriver: true,
+          outcome: outcome,
+          cancelReason: row['cancel_reason'] as String?,
+          cancelledBy: row['cancelled_by'] as String?,
+          driverUserId: isDriver ? myUserId : trip['driver_user_id'] as int?,
+          passengerUserId: isDriver ? row['passenger_id'] as int? : myUserId,
+          remoteTripId: trip['id'] as int?,
+        ));
+      }
+      if (newOnes.isNotEmpty) {
+        records = [...records, ...newOnes]..sort((a, b) => b.completedAt.compareTo(a.completedAt));
+        await _persist();
+        notifyListeners();
+      }
+    } catch (_) {
+      // Internet yo‘q yoki server javob bermadi — mahalliy ro‘yxat o‘zgarishsiz qoladi.
+    }
   }
 
   /// Hisobdan chiqishda — bu qurilmadagi keyingi foydalanuvchi oldingisining

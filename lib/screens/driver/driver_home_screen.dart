@@ -331,7 +331,7 @@ class _LiveOrderCard extends StatelessWidget {
                   final err = await DriverTripService.instance.completeOrder(
                     order.id,
                     completedBy: TripCompletedBy.driver,
-                    driverRatedPassenger: true,
+                    driverStars: stars,
                   );
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -369,10 +369,15 @@ class _LiveOrderCard extends StatelessWidget {
                 if (ok == true) {
                   final reason = await showCancelReasonSheet(context);
                   if (reason != null) {
-                    await TripCancelService.instance.cancelByDriver(
+                    final err = await TripCancelService.instance.cancelByDriver(
                       orderId: order.id,
                       reason: reason,
                     );
+                    if (context.mounted && err != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(err), behavior: SnackBarBehavior.floating),
+                      );
+                    }
                   }
                 }
               },

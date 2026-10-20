@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/taxi_offer.dart';
 import '../services/active_booking_service.dart';
 import '../services/auth_service.dart';
+import '../services/chat_service.dart';
 import '../services/profile_service.dart';
 import '../services/safaron_api.dart';
 import '../services/trip_completion_service.dart';
@@ -51,6 +52,8 @@ class PassengerOrder {
     this.pickedUpAt,
     this.expiresAt,
     this.broadcastGroupId,
+    this.passengerUserId,
+    this.passengerPhoto,
   });
 
   final String id;
@@ -75,6 +78,8 @@ class PassengerOrder {
   final DateTime? expiresAt;
   /// Oldindan bron — barcha haydovchilarga yuborilgan guruh id.
   final String? broadcastGroupId;
+  final int? passengerUserId;
+  final String? passengerPhoto;
 
   String get routeLabel {
     if (from.isEmpty && to.isEmpty) return 'Taksi';
@@ -132,6 +137,8 @@ class PassengerOrder {
       targetTaxiId: targetTaxiId,
       expiresAt: expiresAt ?? this.expiresAt,
       broadcastGroupId: broadcastGroupId ?? this.broadcastGroupId,
+      passengerUserId: passengerUserId,
+      passengerPhoto: passengerPhoto,
     );
   }
 
@@ -157,6 +164,8 @@ class PassengerOrder {
         if (pickedUpAt != null) 'pickedUpAt': pickedUpAt!.toIso8601String(),
         if (expiresAt != null) 'expiresAt': expiresAt!.toIso8601String(),
         if (broadcastGroupId != null) 'broadcastGroupId': broadcastGroupId,
+        if (passengerUserId != null) 'passengerUserId': passengerUserId,
+        if (passengerPhoto != null) 'passengerPhoto': passengerPhoto,
       };
 
   static PassengerOrder fromJson(Map<String, dynamic> j) {
@@ -190,6 +199,8 @@ class PassengerOrder {
       targetTaxiId: j['targetTaxiId'] as String? ?? '',
       expiresAt: j['expiresAt'] == null ? null : DateTime.tryParse(j['expiresAt'] as String),
       broadcastGroupId: j['broadcastGroupId'] as String?,
+      passengerUserId: j['passengerUserId'] as int?,
+      passengerPhoto: j['passengerPhoto'] as String?,
     );
   }
 }
@@ -446,6 +457,12 @@ class DriverTripService extends ChangeNotifier {
       _syncHeartbeat();
       _armInboxPoll();
     }
+    if (ProfileService.instance.isApprovedDriver) {
+      // Qayta o'rnatilgan ilova yoki boshqa qurilmada kirilganda ham
+      // haydovchining e'lon qilgan safarlari bo'sh ko'rinmasligi uchun.
+      // ignore: unawaited_futures
+      syncFromServer();
+    }
     notifyListeners();
   }
 
@@ -539,8 +556,9 @@ class DriverTripService extends ChangeNotifier {
   TaxiOffer _driverTaxiOffer({required int price, String? tripId, String from = '', String to = ''}) {
     final p = ProfileService.instance;
     final carPhoto = p.carPhotoPath;
+    final id = tripId ?? myDriverId;
     return TaxiOffer(
-      id: tripId ?? myDriverId,
+      id: id,
       from: from,
       to: to,
       time: '',
@@ -553,6 +571,9 @@ class DriverTripService extends ChangeNotifier {
       plate: p.plate,
       phone: p.phone,
       imageAsset: carPhoto.isNotEmpty ? carPhoto : 'assets/images/car_cobalt.png',
+      driverPhoto: p.avatarPath,
+      driverUserId: AuthService.instance.user?.id,
+      remoteTripId: id.startsWith('dt_') ? int.tryParse(id.substring(3)) : null,
       period: TimeOfDayFilter.all,
       etaMinutes: 12,
       isOnline: isOnline,
@@ -592,6 +613,9 @@ class DriverTripService extends ChangeNotifier {
         plate: p.plate,
         phone: p.phone,
         imageAsset: p.carPhotoPath.isNotEmpty ? p.carPhotoPath : 'assets/images/car_cobalt.png',
+        driverPhoto: p.avatarPath,
+        driverUserId: AuthService.instance.user?.id,
+        remoteTripId: int.tryParse(t.id.substring(3)),
         period: TimeOfDayFilter.all,
         badge: t.isOpenTrip ? 'Ochiq taksi' : null,
         etaMinutes: 12,
@@ -688,6 +712,8 @@ class DriverTripService extends ChangeNotifier {
       pickedUpAt: pickedUpAt == null ? null : DateTime.tryParse(pickedUpAt),
       targetTaxiId: 'dt_${trip['id']}',
       expiresAt: expiresAt == null ? null : DateTime.tryParse(expiresAt),
+      passengerUserId: row['passenger_id'] as int?,
+      passengerPhoto: row['passenger_photo'] as String?,
     );
   }
 
@@ -761,6 +787,15 @@ class DriverTripService extends ChangeNotifier {
       tripId: order.targetTaxiId,
       from: order.from,
       to: order.to,
+    );
+
+    // Haydovchi hali Xabarlar bo'limini ochmagan bo'lsa ham, qabul qilgan
+    // zahoti yo'lovchi bilan suhbat tayyor bo'lishi uchun proaktiv yaratamiz.
+    ChatService.instance.ensureThread(
+      taxi,
+      passengerNameOverride: order.passengerName,
+      passengerUserIdOverride: order.passengerUserId,
+      passengerPhotoOverride: order.passengerPhoto,
     );
 
     final bookingId = order.broadcastGroupId ?? id;
@@ -1044,12 +1079,17 @@ class DriverTripService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// `driverStars` berilsa (foydalanuvchi baholash dialogida yulduzcha
+  /// tanlagan bo'lsa) — yo'lovchining haqiqiy user id'si ma'lum bo'lsa,
+  /// baho serverga (`RatingApi`) ham yuboriladi, aks holda faqat mahalliy
+  /// "baholandi" belgisi qo'yiladi (eski/mahalliy buyurtmalar uchun).
   /// Natija: muvaffaqiyatda `null`, serverdan xato kelsa xabar matni.
   Future<String?> completeOrder(
     String id, {
     TripCompletedBy completedBy = TripCompletedBy.driver,
     bool driverRatedPassenger = false,
     bool passengerRatedDriver = false,
+    int? driverStars,
   }) async {
     final order = orderById(id);
     final remoteId = _remoteBookingId(id);
@@ -1065,6 +1105,22 @@ class DriverTripService extends ChangeNotifier {
     await markOrderDone(id);
     await ActiveBookingService.instance.markBookingCompleted(id);
     if (order != null) {
+      final remoteTripId = order.targetTaxiId.startsWith('dt_')
+          ? int.tryParse(order.targetTaxiId.substring(3))
+          : null;
+      var ratedPassenger = driverRatedPassenger;
+      if (driverStars != null) {
+        ratedPassenger = true;
+        if (order.passengerUserId != null) {
+          try {
+            await RatingApi.instance.rate(
+              toUserId: order.passengerUserId!,
+              stars: driverStars,
+              tripId: remoteTripId,
+            );
+          } catch (_) {}
+        }
+      }
       await TripCompletionService.instance.recordCompletion(
         bookingId: id,
         from: order.from,
@@ -1075,8 +1131,11 @@ class DriverTripService extends ChangeNotifier {
         driverName: ProfileService.instance.fullName.isEmpty
             ? 'Haydovchi'
             : ProfileService.instance.fullName,
-        driverRatedPassenger: driverRatedPassenger,
+        driverRatedPassenger: ratedPassenger,
         passengerRatedDriver: passengerRatedDriver,
+        driverUserId: AuthService.instance.user?.id,
+        passengerUserId: order.passengerUserId,
+        remoteTripId: remoteTripId,
       );
     }
     notifyListeners();
@@ -1220,12 +1279,15 @@ class DriverTripService extends ChangeNotifier {
         for (final t in remoteTrips)
           if (t['id'] != null) t['id'] as int: t,
       };
+      final matchedIds = <int>{};
       myTrips = [
         for (final t in myTrips)
           if (t.id.startsWith('dt_') && int.tryParse(t.id.substring(3)) != null)
             () {
-              final remote = byRemoteId[int.parse(t.id.substring(3))];
+              final remoteId = int.parse(t.id.substring(3));
+              final remote = byRemoteId[remoteId];
               if (remote == null) return t;
+              matchedIds.add(remoteId);
               final seatsAvailable = remote['seats_available'] as int? ?? t.seats;
               final status = remote['status'] as String? ?? '';
               final stillActive = status == 'OPEN' || status == 'FULL';
@@ -1234,6 +1296,42 @@ class DriverTripService extends ChangeNotifier {
           else
             t,
       ];
+      // Serverda bor, lekin mahalliy ro'yxatda yo'q safarlar (masalan ilova
+      // qayta o'rnatilgan yoki boshqa qurilmada kirilgan) — yangi yozuv
+      // sifatida qo'shamiz, aks holda haydovchi "Mening safarlarim"da
+      // bo'sh ro'yxat ko'rib, qayta e'lon qilishga urinib ko'rardi.
+      final newOnes = <DriverPublishedTrip>[];
+      for (final entry in byRemoteId.entries) {
+        if (matchedIds.contains(entry.key)) continue;
+        final remote = entry.value;
+        final scheduled = DateTime.tryParse(remote['scheduled_at'] as String? ?? '');
+        final created = DateTime.tryParse(remote['created_at'] as String? ?? '') ?? DateTime.now();
+        final status = remote['status'] as String? ?? '';
+        newOnes.add(DriverPublishedTrip(
+          id: 'dt_${entry.key}',
+          from: remote['from_text'] as String? ?? '',
+          to: remote['to_text'] as String? ?? '',
+          timeLabel: scheduled == null
+              ? ''
+              : '${scheduled.hour.toString().padLeft(2, '0')}:${scheduled.minute.toString().padLeft(2, '0')}',
+          dateLabel: scheduled == null
+              ? ''
+              : '${scheduled.day.toString().padLeft(2, '0')}.${scheduled.month.toString().padLeft(2, '0')}',
+          seats: remote['seats_available'] as int? ?? remote['seats_total'] as int? ?? 1,
+          price: remote['price'] as int? ?? 0,
+          createdAt: created,
+          active: status == 'OPEN' || status == 'FULL',
+        ));
+      }
+      if (newOnes.isNotEmpty) {
+        // Yuqoridagi `await TripApi.instance.mine()`dan keyin, bu yerga
+        // yetib kelgunga qadar boshqa joyda (masalan bir vaqtda ishlagan
+        // publishTrip()) xuddi shu id allaqachon qo'shilib qolgan bo'lishi
+        // mumkin — qayta tekshirib, takrorlanishni oldini olamiz.
+        final currentIds = myTrips.map((t) => t.id).toSet();
+        final toAdd = newOnes.where((t) => !currentIds.contains(t.id));
+        myTrips = [...toAdd, ...myTrips];
+      }
       await _persistTrips();
       notifyListeners();
     } catch (_) {

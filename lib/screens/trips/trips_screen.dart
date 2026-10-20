@@ -6,6 +6,7 @@ import '../../data/trip_history.dart';
 import '../../services/active_booking_service.dart';
 import '../../services/app_refresh.dart';
 import '../../services/auth_service.dart';
+import '../../services/safaron_api.dart';
 import '../../services/trip_completion_service.dart';
 import '../../widgets/rating_dialog.dart';
 import '../../theme/app_colors.dart';
@@ -416,6 +417,17 @@ class _CompletedTripCard extends StatelessWidget {
                     title: trRateLabel(booking.taxi.driverName),
                   );
                   if (stars == null) return;
+                  final toUserId = record?.driverUserId;
+                  if (toUserId != null) {
+                    try {
+                      await RatingApi.instance.rate(
+                        toUserId: toUserId,
+                        stars: stars,
+                        requestId: record?.remoteRequestId,
+                        tripId: record?.remoteTripId,
+                      );
+                    } catch (_) {}
+                  }
                   await TripCompletionService.instance.markPassengerRatedDriver(booking.id);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(

@@ -161,7 +161,7 @@ class DriverMyTripsScreen extends StatelessWidget {
                                     final err = await svc.completeOrder(
                                       o.id,
                                       completedBy: TripCompletedBy.driver,
-                                      driverRatedPassenger: true,
+                                      driverStars: stars,
                                     );
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(context).showSnackBar(

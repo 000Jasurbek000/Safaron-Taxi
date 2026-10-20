@@ -134,6 +134,13 @@ class TripApi {
     return (data as List).cast<Map<String, dynamic>>();
   }
 
+  /// Yo‘lovchi sifatida o‘zim band qilgan, yakunlangan/bekor qilingan
+  /// safarlar tarixi — login/qayta tiklashda foydalaniladi.
+  Future<List<Map<String, dynamic>>> bookingsMine() async {
+    final data = await ApiClient.instance.get('/api/trips/bookings/mine');
+    return (data as List).cast<Map<String, dynamic>>();
+  }
+
   Future<Map<String, dynamic>> respondBooking(
     int bookingId, {
     required String action,
@@ -222,5 +229,33 @@ class NotificationApi {
 
   Future<void> markAllRead() async {
     await ApiClient.instance.post('/api/notifications/read-all');
+  }
+}
+
+class MessageApi {
+  MessageApi._();
+  static final MessageApi instance = MessageApi._();
+
+  Future<Map<String, dynamic>> send({
+    required String body,
+    required int receiverId,
+    int? tripId,
+    int? requestId,
+  }) async {
+    final data = await ApiClient.instance.post('/api/messages', body: {
+      'body': body,
+      'receiver_id': receiverId,
+      if (tripId != null) 'trip_id': tripId,
+      if (requestId != null) 'request_id': requestId,
+    });
+    return data as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> list({int? tripId, int? requestId}) async {
+    final data = await ApiClient.instance.get('/api/messages', query: {
+      if (tripId != null) 'trip_id': '$tripId',
+      if (requestId != null) 'request_id': '$requestId',
+    });
+    return (data as List).cast<Map<String, dynamic>>();
   }
 }

@@ -3,6 +3,7 @@ import '../../l10n/phrase.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/driver_trip_service.dart';
+import '../../services/safaron_api.dart';
 import '../../services/trip_completion_service.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/money.dart';
@@ -127,6 +128,17 @@ class DriverTripsArchiveScreen extends StatelessWidget {
                                       title: trRateLabel(o.passengerName),
                                     );
                                     if (stars == null) return;
+                                    final toUserId = record?.passengerUserId;
+                                    if (toUserId != null) {
+                                      try {
+                                        await RatingApi.instance.rate(
+                                          toUserId: toUserId,
+                                          stars: stars,
+                                          requestId: record?.remoteRequestId,
+                                          tripId: record?.remoteTripId,
+                                        );
+                                      } catch (_) {}
+                                    }
                                     await TripCompletionService.instance.markDriverRatedPassenger(o.id);
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(context).showSnackBar(

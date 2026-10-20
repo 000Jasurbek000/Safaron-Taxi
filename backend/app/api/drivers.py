@@ -8,10 +8,10 @@ from sqlalchemy.orm import Session, joinedload
 from app.config import get_settings
 from app.database import get_db
 from app.deps import get_approved_driver, get_current_user
-from app.models import DriverDocument, DriverProfile, User, Vehicle
+from app.models import DriverDocument, DriverProfile, Trip, TripBooking, TripRequest, User, Vehicle
 from app.schemas import HeartbeatIn, OkResponse, OnlineIn, UserOut
 from app.services.phone import normalize_plate, validate_plate
-from app.services.serializers import user_out
+from app.services.serializers import booking_out, user_out
 
 router = APIRouter(prefix="/drivers", tags=["drivers"])
 
@@ -165,12 +165,11 @@ def heartbeat(body: HeartbeatIn, driver: DriverProfile = Depends(get_approved_dr
 
 @router.get("/me/earnings")
 def earnings(driver: DriverProfile = Depends(get_approved_driver), db: Session = Depends(get_db)):
-    # Simplified aggregates from completed requests where selected
-    from app.models import TripRequest
-    from sqlalchemy import func
+    now = datetime.utcnow()
+    today = now.date()
 
-    today = datetime.utcnow().date()
-    rows = (
+    # Oldindan bron (TripRequest) orqali yakunlangan safarlar.
+    request_rows = (
         db.query(TripRequest)
         .filter(
             TripRequest.selected_driver_id == driver.id,
@@ -178,14 +177,39 @@ def earnings(driver: DriverProfile = Depends(get_approved_driver), db: Session =
         )
         .all()
     )
-    def day_sum(pred):
-        return sum((r.agreed_price or r.offered_price) for r in rows if pred(r))
+    # Hozirgi (TripBooking) oqimi orqali yakunlangan safarlar — avval bu
+    # yerda hisobga olinmas edi, shuning uchun kun/hafta/oy raqamlari
+    # instant-booking orqali ishlayotgan haydovchilar uchun doim 0 ko'rinardi.
+    booking_rows = (
+        db.query(TripBooking)
+        .join(Trip, Trip.id == TripBooking.trip_id)
+        .filter(Trip.driver_id == driver.id, TripBooking.status == "COMPLETED")
+        .order_by(TripBooking.completed_at.desc(), TripBooking.created_at.desc())
+        .limit(200)
+        .all()
+    )
+
+    def req_sum(pred):
+        return sum((r.agreed_price or r.offered_price) for r in request_rows if pred(r.updated_at))
+
+    def booking_sum(pred):
+        return sum((b.agreed_price or 0) for b in booking_rows if pred(b.completed_at or b.created_at))
+
+    def is_today(dt):
+        return dt is not None and dt.date() == today
+
+    def is_week(dt):
+        return dt is not None and (now - dt).days < 7
+
+    def is_month(dt):
+        return dt is not None and (now - dt).days < 30
 
     return {
-        "today": day_sum(lambda r: r.updated_at.date() == today),
-        "week": day_sum(lambda r: (datetime.utcnow() - r.updated_at).days < 7),
-        "month": day_sum(lambda r: (datetime.utcnow() - r.updated_at).days < 30),
+        "today": req_sum(is_today) + booking_sum(is_today),
+        "week": req_sum(is_week) + booking_sum(is_week),
+        "month": req_sum(is_month) + booking_sum(is_month),
         "total": driver.total_earnings,
         "trips_count": driver.trips_count,
         "rating_avg": driver.rating_avg,
+        "recent": [booking_out(db, b) for b in booking_rows],
     }

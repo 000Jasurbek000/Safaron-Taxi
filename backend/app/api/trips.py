@@ -132,6 +132,26 @@ def bookings_inbox(driver: DriverProfile = Depends(get_approved_driver), db: Ses
     return out
 
 
+# NOTE: same reason as "/bookings/inbox" above — must stay before
+# "/bookings/{booking_id}".
+@router.get("/bookings/mine", response_model=list[TripBookingOut])
+def my_bookings(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Yo'lovchi sifatida o'zim band qilgan safarlar tarixi (yakunlangan,
+    bekor qilingan, rad etilgan, muddati o'tgan) — login/qayta tiklashda
+    foydalaniladi."""
+    rows = (
+        db.query(TripBooking)
+        .filter(
+            TripBooking.passenger_id == user.id,
+            TripBooking.status.in_(["COMPLETED", "CANCELLED", "REJECTED", "EXPIRED"]),
+        )
+        .order_by(TripBooking.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    return [booking_out(db, b) for b in rows]
+
+
 @router.get("/bookings/{booking_id}", response_model=TripBookingOut)
 def get_booking(booking_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     booking = db.get(TripBooking, booking_id)
@@ -401,6 +421,12 @@ def advance_booking_status(
     is_passenger = booking.passenger_id == user.id
     new = body.status.upper()
 
+    if new in ("CANCELLED", "REJECTED", "EXPIRED"):
+        # Bu endpoint faqat ijobiy progress (on-way/picked-up/completed) uchun —
+        # bekor qilish uchun /cancel ishlatilsin, u joy sonini to'g'ri qaytaradi
+        # va cancelled_by/cancel_reason/cancelled_at'ni to'ldiradi.
+        raise HTTPException(400, "Bekor qilish uchun /cancel endpointidan foydalaning.")
+
     if new == "COMPLETED":
         if not is_owner_driver and not is_passenger:
             raise HTTPException(403, "Bu amalni bajarish huquqingiz yo‘q.")
@@ -411,6 +437,8 @@ def advance_booking_status(
     booking.status = new
     if new == "PASSENGER_PICKED":
         booking.picked_up_at = datetime.utcnow()
+    elif new == "COMPLETED":
+        booking.completed_at = datetime.utcnow()
 
     trip_driver = db.get(DriverProfile, trip.driver_id) if trip else None
     titles = {

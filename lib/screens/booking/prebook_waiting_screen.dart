@@ -89,6 +89,7 @@ class _PrebookWaitingScreenState extends State<PrebookWaitingScreen>
       final accepted = req.responses.where((r) => r['status'] == 'ACCEPTED' || r['status'] == 'SELECTED' || r['status'] == 'CONFIRMED').toList();
       if (accepted.isEmpty) return;
       final r = accepted.first;
+      final carPhoto = r['car_photo'] as String?;
       final taxi = TaxiOffer(
         id: 'drv_${r['driver_id']}',
         from: req.fromText,
@@ -102,7 +103,8 @@ class _PrebookWaitingScreenState extends State<PrebookWaitingScreen>
         carModel: r['car_model'] as String? ?? '',
         plate: r['plate'] as String? ?? '',
         phone: r['phone'] as String? ?? '',
-        imageAsset: 'assets/images/car_cobalt.png',
+        imageAsset: (carPhoto != null && carPhoto.isNotEmpty) ? carPhoto : 'assets/images/car_cobalt.png',
+        driverPhoto: r['photo'] as String? ?? '',
         period: TimeOfDayFilter.all,
       );
       _timer?.cancel();
@@ -185,11 +187,18 @@ class _PrebookWaitingScreenState extends State<PrebookWaitingScreen>
     final b = ActiveBookingService.instance.prebookBooking;
     final id = b?.id ?? (widget.remoteRequestId != null ? 'req_${widget.remoteRequestId}' : null);
     if (id != null) {
-      await TripCancelService.instance.cancelByPassenger(
+      final err = await TripCancelService.instance.cancelByPassenger(
         bookingId: id,
         reason: reason,
         kind: BookingKind.prebook,
       );
+      if (!mounted) return;
+      if (err != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(err), behavior: SnackBarBehavior.floating),
+        );
+        return;
+      }
     }
     if (!mounted) return;
     goToHome(context);

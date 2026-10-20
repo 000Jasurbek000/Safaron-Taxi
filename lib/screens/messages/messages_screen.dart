@@ -8,6 +8,7 @@ import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/chat_service.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/smart_photo.dart';
 import '../booking/driver_chat_screen.dart';
 
 class MessagesScreen extends StatelessWidget {
@@ -172,13 +173,12 @@ class _MessagesBody extends StatelessWidget {
                             padding: const EdgeInsets.all(12),
                             child: Row(
                               children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(14),
-                                  child: Image.asset(
-                                    t.imageAsset,
+                                ClipOval(
+                                  child: SmartPhoto(
+                                    src: t.driverPhoto,
+                                    fallback: 'assets/images/driver_avatar.png',
                                     width: 58,
                                     height: 58,
-                                    fit: BoxFit.cover,
                                   ),
                                 ),
                                 const SizedBox(width: 12),

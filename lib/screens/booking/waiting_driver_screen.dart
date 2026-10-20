@@ -161,9 +161,10 @@ class _WaitingDriverScreenState extends State<WaitingDriverScreen>
   Future<void> _cancel() async {
     final reason = await showCancelReasonSheet(context);
     if (reason == null || !mounted) return;
+    String? err;
     final id = _bookingId;
     if (id != null) {
-      await TripCancelService.instance.cancelByPassenger(
+      err = await TripCancelService.instance.cancelByPassenger(
         bookingId: id,
         reason: reason,
         kind: BookingKind.instant,
@@ -171,7 +172,7 @@ class _WaitingDriverScreenState extends State<WaitingDriverScreen>
     } else {
       final b = ActiveBookingService.instance.instantBooking;
       if (b != null) {
-        await TripCancelService.instance.cancelByPassenger(
+        err = await TripCancelService.instance.cancelByPassenger(
           bookingId: b.id,
           reason: reason,
           kind: BookingKind.instant,
@@ -179,6 +180,12 @@ class _WaitingDriverScreenState extends State<WaitingDriverScreen>
       }
     }
     if (!mounted) return;
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
     goToHome(context);
   }
 

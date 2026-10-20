@@ -1,5 +1,6 @@
 import '../l10n/phrase.dart';
 import 'active_booking_service.dart';
+import 'api_client.dart';
 import 'driver_trip_service.dart';
 import 'profile_service.dart';
 import 'safaron_api.dart';
@@ -23,22 +24,39 @@ class TripCancelService {
   /// `req_` (oldindan bron — TripRequest) va `inst_` (hozirgi band qilish —
   /// TripBooking) turli backend endpointlariga ega, shuning uchun prefiksga
   /// qarab tarqatiladi.
-  Future<void> _cancelRemote(String bookingId, String reason) async {
+  ///
+  /// Natija: serverga ulanib bo'lmasa yoki server xato qaytarsa — xabar
+  /// matni (bu holda chaqiruvchi mahalliy "bekor qilindi" belgisini
+  /// qo'ymasligi kerak, aks holda ikkala qurilma holati serverdan abadiy
+  /// uzilib qoladi — poll qayta tiklay olmaydi, chunki mahalliy "cancelled"
+  /// belgisi booking'ni keyingi poll nishonlaridan chiqarib tashlaydi).
+  /// Haqiqiy remote id bo'lmagan (hali hech qachon serverga ulanmagan)
+  /// bron uchun — har doim `null` (davom etish xavfsiz).
+  Future<String?> _cancelRemote(String bookingId, String reason) async {
     if (bookingId.startsWith('req_')) {
       final remote = _remoteId(bookingId);
       if (remote != null) {
         try {
           await RequestApi.instance.cancel(remote, reason);
-        } catch (_) {}
+        } on ApiException catch (e) {
+          return e.message;
+        } catch (_) {
+          return tr('Internet aloqasi yo‘q yoki server javob bermadi. Qayta urinib ko‘ring.');
+        }
       }
     } else if (bookingId.startsWith('inst_')) {
       final remote = _remoteId(bookingId);
       if (remote != null) {
         try {
           await TripApi.instance.cancelBooking(remote, reason);
-        } catch (_) {}
+        } on ApiException catch (e) {
+          return e.message;
+        } catch (_) {
+          return tr('Internet aloqasi yo‘q yoki server javob bermadi. Qayta urinib ko‘ring.');
+        }
       }
     }
+    return null;
   }
 
   String _resolveBookingId(String bookingId, PassengerOrder? order) {
@@ -48,7 +66,10 @@ class TripCancelService {
     return bookingId;
   }
 
-  Future<void> cancelByPassenger({
+  /// Natija: muvaffaqiyatda `null`, serverdan xato kelsa xabar matni — bu
+  /// holda mahalliy holat ATAYLAB o'zgartirilmaydi (pastga qarang), shunda
+  /// keyingi poll hali ham haqiqiy server holatini topib oladi.
+  Future<String?> cancelByPassenger({
     required String bookingId,
     required String reason,
     BookingKind? kind,
@@ -64,7 +85,8 @@ class TripCancelService {
     }
     final groupId = _resolveBookingId(bookingId, order);
 
-    await _cancelRemote(groupId, reason);
+    final err = await _cancelRemote(groupId, reason);
+    if (err != null) return err;
 
     await DriverTripService.instance.cancelAllForBooking(
       groupId,
@@ -89,15 +111,17 @@ class TripCancelService {
     DriverTripService.instance.setDriverNotice(
       tr('Yo‘lovchi safarni bekor qildi: {reason}').replaceAll('{reason}', reason),
     );
+    return null;
   }
 
-  Future<void> cancelByDriver({
+  /// Natija: muvaffaqiyatda `null`, serverdan xato kelsa xabar matni.
+  Future<String?> cancelByDriver({
     required String orderId,
     required String reason,
     bool fullTrip = true,
   }) async {
     final order = DriverTripService.instance.orderById(orderId);
-    if (order == null) return;
+    if (order == null) return null;
 
     final groupId = _resolveBookingId(orderId, order);
     final isLive = order.status == PassengerOrderStatus.accepted ||
@@ -106,11 +130,11 @@ class TripCancelService {
         order.status == PassengerOrderStatus.counterOffered;
 
     if (!fullTrip || !isLive) {
-      await DriverTripService.instance.rejectOpenOrder(orderId, reason: reason);
-      return;
+      return DriverTripService.instance.rejectOpenOrder(orderId, reason: reason);
     }
 
-    await _cancelRemote(groupId, reason);
+    final err = await _cancelRemote(groupId, reason);
+    if (err != null) return err;
 
     await DriverTripService.instance.cancelAllForBooking(
       groupId,
@@ -134,6 +158,7 @@ class TripCancelService {
     DriverTripService.instance.setPassengerNotice(
       tr('Haydovchi safarni bekor qildi: {reason}').replaceAll('{reason}', reason),
     );
+    return null;
   }
 
   Future<void> _archiveCancellation({

@@ -5,7 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/taxi_offer.dart';
+import 'auth_service.dart';
 import 'profile_service.dart';
+import 'safaron_api.dart';
 
 class ChatMessage {
   const ChatMessage({
@@ -46,6 +48,11 @@ class ChatThread {
     required this.messages,
     required this.updatedAt,
     this.passengerName = 'Yo‘lovchi',
+    this.driverPhoto = '',
+    this.passengerPhoto = '',
+    this.remoteTripId,
+    this.driverUserId,
+    this.passengerUserId,
   });
 
   final String taxiId;
@@ -57,6 +64,14 @@ class ChatThread {
   final List<ChatMessage> messages;
   final DateTime updatedAt;
   final String passengerName;
+  final String driverPhoto;
+  final String passengerPhoto;
+
+  /// Server haqiqiy Trip id'si — mavjud bo'lsa, bu suhbat serverga ulangan
+  /// bo'ladi (xabar yuborish/sinxronlash backendga boradi).
+  final int? remoteTripId;
+  final int? driverUserId;
+  final int? passengerUserId;
 
   int get unreadCount => messages.where((m) => !m.mine && !m.read).length;
   int get unreadCountForDriver => messages.where((m) => m.mine && !m.read).length;
@@ -91,6 +106,9 @@ class ChatThread {
         plate: plate,
         phone: phone,
         imageAsset: imageAsset,
+        driverPhoto: driverPhoto,
+        driverUserId: driverUserId,
+        remoteTripId: remoteTripId,
         period: TimeOfDayFilter.all,
       );
 
@@ -103,6 +121,11 @@ class ChatThread {
         'imageAsset': imageAsset,
         'updatedAt': updatedAt.toIso8601String(),
         'passengerName': passengerName,
+        'driverPhoto': driverPhoto,
+        'passengerPhoto': passengerPhoto,
+        if (remoteTripId != null) 'remoteTripId': remoteTripId,
+        if (driverUserId != null) 'driverUserId': driverUserId,
+        if (passengerUserId != null) 'passengerUserId': passengerUserId,
         'messages': messages.map((m) => m.toJson()).toList(),
       };
 
@@ -115,6 +138,11 @@ class ChatThread {
         imageAsset: j['imageAsset'] as String? ?? 'assets/images/car_cobalt.png',
         updatedAt: DateTime.parse(j['updatedAt'] as String),
         passengerName: j['passengerName'] as String? ?? tr('Yo‘lovchi'),
+        driverPhoto: j['driverPhoto'] as String? ?? '',
+        passengerPhoto: j['passengerPhoto'] as String? ?? '',
+        remoteTripId: j['remoteTripId'] as int?,
+        driverUserId: j['driverUserId'] as int?,
+        passengerUserId: j['passengerUserId'] as int?,
         messages: (j['messages'] as List<dynamic>)
             .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
             .toList(),
@@ -176,7 +204,18 @@ class ChatService extends ChangeNotifier {
     return name.isEmpty ? tr('Yo‘lovchi') : name;
   }
 
-  ChatThread ensureThread(TaxiOffer taxi) {
+  /// Suhbatni (mavjud bo'lmasa) yaratadi. Odatda passenger o'z qurilmasida
+  /// o'zini-o'zi "yo'lovchi" sifatida belgilaydi (override'siz chaqiriladi).
+  /// Haydovchi tomonidan, so'rovni qabul qilgach, yo'lovchi ma'lumotlarini
+  /// bilib proaktiv urug'lash uchun override'lar beriladi — aks holda
+  /// haydovchi hali Xabarlar bo'limini ochmagan bo'lsa, bu suhbat u yerda
+  /// umuman ko'rinmas edi.
+  ChatThread ensureThread(
+    TaxiOffer taxi, {
+    String? passengerNameOverride,
+    int? passengerUserIdOverride,
+    String? passengerPhotoOverride,
+  }) {
     final existing = _threads[taxi.id];
     if (existing != null) return existing;
 
@@ -188,15 +227,13 @@ class ChatService extends ChangeNotifier {
       phone: taxi.phone,
       imageAsset: taxi.imageAsset,
       updatedAt: DateTime.now(),
-      passengerName: _passengerLabel(),
-      messages: [
-        ChatMessage(
-          text: 'Assalomu alaykum! Qayerdan olasiz?',
-          mine: false,
-          at: DateTime.now(),
-          read: false,
-        ),
-      ],
+      passengerName: passengerNameOverride ?? _passengerLabel(),
+      driverPhoto: taxi.driverPhoto,
+      passengerPhoto: passengerPhotoOverride ?? ProfileService.instance.avatarPath,
+      remoteTripId: taxi.remoteTripId,
+      driverUserId: taxi.driverUserId,
+      passengerUserId: passengerUserIdOverride ?? AuthService.instance.user?.id,
+      messages: const [],
     );
     _threads[taxi.id] = thread;
     _persist();
@@ -215,6 +252,11 @@ class ChatService extends ChangeNotifier {
       messages: thread.messages,
       updatedAt: updatedAt,
       passengerName: thread.passengerName,
+      driverPhoto: thread.driverPhoto,
+      passengerPhoto: thread.passengerPhoto,
+      remoteTripId: thread.remoteTripId,
+      driverUserId: thread.driverUserId,
+      passengerUserId: thread.passengerUserId,
     );
   }
 
@@ -265,6 +307,18 @@ class ChatService extends ChangeNotifier {
     if (trimmed.isEmpty) return;
     ensureThread(taxi);
     final thread = _threads[taxi.id]!;
+    if (thread.remoteTripId != null && thread.driverUserId != null) {
+      try {
+        await MessageApi.instance.send(
+          body: trimmed,
+          receiverId: thread.driverUserId!,
+          tripId: thread.remoteTripId,
+        );
+      } catch (_) {
+        // Internet yo'q — mahalliy xabar baribir saqlanadi, keyingi
+        // sinxronlashda server holati bilan almashtiriladi.
+      }
+    }
     final now = DateTime.now();
     thread.messages.add(ChatMessage(text: trimmed, mine: true, at: now, read: false));
     _storeThread(thread, now);
@@ -277,10 +331,67 @@ class ChatService extends ChangeNotifier {
     if (trimmed.isEmpty) return;
     final thread = _threads[taxiId];
     if (thread == null) return;
+    if (thread.remoteTripId != null && thread.passengerUserId != null) {
+      try {
+        await MessageApi.instance.send(
+          body: trimmed,
+          receiverId: thread.passengerUserId!,
+          tripId: thread.remoteTripId,
+        );
+      } catch (_) {}
+    }
     final now = DateTime.now();
     thread.messages.add(ChatMessage(text: trimmed, mine: false, at: now, read: false));
     _storeThread(thread, now);
     await _persist();
     notifyListeners();
+  }
+
+  /// Boshqa qurilmadan kelgan xabarlarni serverdan tortib, mahalliy
+  /// ro'yxatni almashtiradi. Faqat server-backed (remoteTripId bor) suhbatlar
+  /// uchun ishlaydi — demo/mock suhbatlar mahalliyligicha qoladi.
+  Future<void> syncFromServer(String taxiId) async {
+    final thread = _threads[taxiId];
+    if (thread == null || thread.remoteTripId == null) return;
+    try {
+      final rows = await MessageApi.instance.list(tripId: thread.remoteTripId);
+      final mapped = rows
+          .map((r) => ChatMessage(
+                text: r['body'] as String? ?? '',
+                mine: r['sender_id'] == thread.passengerUserId,
+                at: DateTime.tryParse(r['created_at'] as String? ?? '') ?? DateTime.now(),
+                read: r['is_read'] as bool? ?? false,
+              ))
+          .toList();
+      _threads[taxiId] = ChatThread(
+        taxiId: thread.taxiId,
+        driverName: thread.driverName,
+        carModel: thread.carModel,
+        plate: thread.plate,
+        phone: thread.phone,
+        imageAsset: thread.imageAsset,
+        driverPhoto: thread.driverPhoto,
+        passengerPhoto: thread.passengerPhoto,
+        remoteTripId: thread.remoteTripId,
+        driverUserId: thread.driverUserId,
+        passengerUserId: thread.passengerUserId,
+        messages: mapped,
+        updatedAt: mapped.isEmpty ? thread.updatedAt : mapped.last.at,
+        passengerName: thread.passengerName,
+      );
+      await _persist();
+      notifyListeners();
+    } catch (_) {
+      // Internet yo'q yoki server javob bermadi — mahalliy ro'yxat o'zgarishsiz qoladi.
+    }
+  }
+
+  /// Barcha server-backed suhbatlarni yangilaydi — pastga tortib yangilashda
+  /// har bir threadni alohida ochmasdan preview/unread-belgi yangilanishi uchun.
+  Future<void> syncAllFromServer() async {
+    final targets = _threads.values.where((t) => t.remoteTripId != null).map((t) => t.taxiId).toList();
+    for (final taxiId in targets) {
+      await syncFromServer(taxiId);
+    }
   }
 }

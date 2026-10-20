@@ -44,6 +44,11 @@ def ensure_columns() -> None:
             ("eta_arrive_at", "TIMESTAMP"),
             ("picked_up_at", "TIMESTAMP"),
             ("expires_at", "TIMESTAMP"),
+            ("completed_at", "TIMESTAMP"),
+        ],
+        "messages": [
+            ("request_id", "INTEGER"),
+            ("trip_id", "INTEGER"),
         ],
     }
     insp = inspect(engine)
