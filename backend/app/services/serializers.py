@@ -151,7 +151,11 @@ def response_out(resp: DriverResponse, driver: DriverProfile, vehicle: Vehicle |
     )
 
 
-def request_out(req: TripRequest, responses: list[DriverResponseOut] | None = None) -> RequestOut:
+def request_out(
+    req: TripRequest,
+    responses: list[DriverResponseOut] | None = None,
+    passenger: User | None = None,
+) -> RequestOut:
     return RequestOut(
         id=req.id,
         passenger_id=req.passenger_id,
@@ -169,6 +173,9 @@ def request_out(req: TripRequest, responses: list[DriverResponseOut] | None = No
         responses=responses or [],
         created_at=req.created_at,
         expires_at=req.expires_at,
+        passenger_name=passenger.full_name if passenger else "",
+        passenger_phone=passenger.phone if passenger else "",
+        passenger_photo=passenger.avatar_path if passenger else None,
     )
 
 

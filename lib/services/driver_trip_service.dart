@@ -320,6 +320,14 @@ class DriverTripService extends ChangeNotifier {
     return int.tryParse(orderId.substring(5));
   }
 
+  /// Oldindan bron (TripRequest) id'si — `req_<id>` shaklida, odatda
+  /// `order.broadcastGroupId ?? order.id` dan olinadi (broadcast order'lar
+  /// `'${groupId}__<targetTaxiId>'` ko'rinishida bo'lgani uchun).
+  int? _remoteRequestId(String bookingId) {
+    if (!bookingId.startsWith('req_')) return null;
+    return int.tryParse(bookingId.substring(4));
+  }
+
   String? get lastPassengerNotice => _lastPassengerNotice;
   String? get lastDriverNotice => _lastDriverNotice;
 
@@ -672,6 +680,110 @@ class DriverTripService extends ChangeNotifier {
     } catch (_) {
       // Internet yo'q yoki server javob bermadi — mahalliy ro'yxat o'zgarishsiz qoladi.
     }
+    await _pollPrebookInbox();
+  }
+
+  /// Oldindan bron so'rovlarini serverdan tortadi. Bitta so'rovga bir nechta
+  /// haydovchi javob berishi mumkin (broadcast) — shuning uchun, agar bu
+  /// safar boshqa haydovchiga berilgan bo'lsa, server uni endi bu haydovchi
+  /// uchun `/inbox`da ko'rsatmaydi; shuni "poll'dan tushib qoldi" deb bilib,
+  /// mahalliy nusxasini yopamiz (aks holda "qabul qilindi" degan abadiy
+  /// noto'g'ri holatda osilib qolardi).
+  Future<void> _pollPrebookInbox() async {
+    try {
+      final rows = await RequestApi.instance.inbox();
+      final seenIds = <String>{};
+      var droppedAny = false;
+      for (final row in rows) {
+        final order = _prebookOrderFromServerRow(row);
+        if (order == null) continue;
+        seenIds.add(order.id);
+        await addPassengerOrder(order);
+      }
+      final stale = orders.where((o) =>
+          o.kind == PassengerOrderKind.prebook &&
+          _isForMe(o) &&
+          (o.status == PassengerOrderStatus.open ||
+              o.status == PassengerOrderStatus.counterOffered ||
+              o.status == PassengerOrderStatus.accepted) &&
+          !seenIds.contains(o.id));
+      final staleIds = stale.map((o) => o.id).toList();
+      if (staleIds.isNotEmpty) {
+        orders = [
+          for (final o in orders)
+            if (staleIds.contains(o.id)) o.copyWith(status: PassengerOrderStatus.cancelled) else o,
+        ];
+        droppedAny = true;
+        await _persistOrders();
+      }
+      if (droppedAny) {
+        setDriverNotice(tr('Yo‘lovchi boshqa haydovchini tanladi.'));
+      }
+      notifyListeners();
+    } catch (_) {
+      // Internet yo'q yoki server javob bermadi — mahalliy ro'yxat o'zgarishsiz qoladi.
+    }
+  }
+
+  PassengerOrderStatus _mapPrebookStatus(String myResponseStatus, String requestStatus) {
+    switch (myResponseStatus) {
+      case 'PENDING':
+        return PassengerOrderStatus.open;
+      case 'ACCEPTED':
+        return PassengerOrderStatus.accepted;
+      case 'SELECTED':
+      case 'CONFIRMED':
+        return switch (requestStatus) {
+          'DRIVER_ON_WAY' => PassengerOrderStatus.onWay,
+          'PASSENGER_PICKED' || 'IN_PROGRESS' => PassengerOrderStatus.pickedUp,
+          'COMPLETED' => PassengerOrderStatus.done,
+          _ => PassengerOrderStatus.accepted,
+        };
+      default:
+        return PassengerOrderStatus.cancelled;
+    }
+  }
+
+  /// Server so'rov qatorini mahalliy `PassengerOrder`ga aylantiradi.
+  /// `responses` backend tomonidan allaqachon shu haydovchining o'z javobiga
+  /// filtrlangan (requests.py: `_build_request_out(..., viewer_driver_id=...)`),
+  /// shuning uchun bu yerda bitta elementdan ko'p bo'lmaydi.
+  PassengerOrder? _prebookOrderFromServerRow(TripRequestDto dto) {
+    final row = dto.raw;
+    final responses = (row['responses'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+    if (responses.isEmpty) return null;
+    final myResponse = responses.first;
+    final id = 'req_${row['id']}';
+    final name = row['passenger_name'] as String?;
+    final scheduled = DateTime.tryParse(row['scheduled_at'] as String? ?? '');
+    return PassengerOrder(
+      id: id,
+      kind: PassengerOrderKind.prebook,
+      from: row['from_text'] as String? ?? '',
+      to: row['to_text'] as String? ?? '',
+      exactPickup: row['exact_place'] as String? ?? '',
+      passengers: row['passengers_count'] as int? ?? 1,
+      createdAt: DateTime.tryParse(row['created_at'] as String? ?? '') ?? DateTime.now(),
+      dateLabel: scheduled == null
+          ? ''
+          : '${scheduled.day.toString().padLeft(2, '0')}.${scheduled.month.toString().padLeft(2, '0')}',
+      timeLabel: scheduled == null
+          ? ''
+          : '${scheduled.hour.toString().padLeft(2, '0')}:${scheduled.minute.toString().padLeft(2, '0')}',
+      offeredPrice: row['offered_price'] as int? ?? 0,
+      agreedPrice: myResponse['offered_price'] as int?,
+      passengerName: (name != null && name.isNotEmpty) ? name : tr('Yo‘lovchi'),
+      passengerPhone: row['passenger_phone'] as String? ?? '',
+      status: _mapPrebookStatus(
+        myResponse['status'] as String? ?? 'PENDING',
+        row['status'] as String? ?? 'SEARCHING',
+      ),
+      targetTaxiId: myDriverId,
+      expiresAt: DateTime.tryParse(row['expires_at'] as String? ?? ''),
+      broadcastGroupId: id,
+      passengerUserId: row['passenger_id'] as int?,
+      passengerPhoto: row['passenger_photo'] as String?,
+    );
   }
 
   PassengerOrderStatus _mapServerBookingStatus(String s) => switch (s) {
@@ -751,6 +863,7 @@ class DriverTripService extends ChangeNotifier {
     final isCounter = agreed != order.offeredPrice;
 
     final remoteId = _remoteBookingId(id);
+    final remoteRequestId = _remoteRequestId(order.broadcastGroupId ?? id);
     if (remoteId != null) {
       try {
         await TripApi.instance.respondBooking(
@@ -758,6 +871,18 @@ class DriverTripService extends ChangeNotifier {
           action: 'accept',
           offeredPrice: isCounter ? agreed : null,
           etaMinutes: etaMinutes,
+        );
+      } on ApiException catch (e) {
+        return e.message;
+      } catch (_) {
+        return tr('Internet aloqasi yo‘q yoki server javob bermadi. Qayta urinib ko‘ring.');
+      }
+    } else if (remoteRequestId != null) {
+      try {
+        await RequestApi.instance.respond(
+          remoteRequestId,
+          action: 'accept',
+          offeredPrice: isCounter ? agreed : null,
         );
       } on ApiException catch (e) {
         return e.message;
@@ -840,11 +965,19 @@ class DriverTripService extends ChangeNotifier {
   /// o‘z narxida va qarshi narx tasdiqlanganda bir xil chaqiriladi,
   /// aks holda haydovchi sig‘imdan ortiq yo‘lovchi qabul qilib qo‘yishi mumkin.
   Future<void> _decrementTripSeatsFor(PassengerOrder order) async {
-    if (activeTrips.isEmpty) return;
-    final trip = activeTrips.firstWhere(
-      (t) => t.id == order.targetTaxiId,
-      orElse: () => activeTrips.first,
-    );
+    // Faqat `targetTaxiId` haqiqatan ham e'lon qilingan safarga mos kelsa
+    // kamaytiramiz. Avval mos kelmasa ham "birinchi faol safar"dan
+    // kamaytirib yuborilardi — oldindan bron (targetTaxiId == myDriverId,
+    // hech qanday e'lon qilingan safarga tegishli emas) uchun bu butunlay
+    // tasodifiy boshqa safarning joy sonini buzib qo'yardi.
+    DriverPublishedTrip? trip;
+    for (final t in activeTrips) {
+      if (t.id == order.targetTaxiId) {
+        trip = t;
+        break;
+      }
+    }
+    if (trip == null) return;
     final left = (trip.seats - order.passengers).clamp(0, trip.seats);
     myTrips = [
       for (final t in myTrips)
@@ -933,9 +1066,18 @@ class DriverTripService extends ChangeNotifier {
     }
 
     final remoteId = _remoteBookingId(orderId);
+    final remoteRequestId = _remoteRequestId(order.broadcastGroupId ?? orderId);
     if (remoteId != null) {
       try {
         await TripApi.instance.respondBooking(remoteId, action: 'reject', message: reason);
+      } on ApiException catch (e) {
+        return e.message;
+      } catch (_) {
+        return tr('Internet aloqasi yo‘q yoki server javob bermadi. Qayta urinib ko‘ring.');
+      }
+    } else if (remoteRequestId != null) {
+      try {
+        await RequestApi.instance.respond(remoteRequestId, action: 'reject');
       } on ApiException catch (e) {
         return e.message;
       } catch (_) {
@@ -1024,10 +1166,25 @@ class DriverTripService extends ChangeNotifier {
 
   /// Natija: muvaffaqiyatda `null`, serverdan xato kelsa xabar matni.
   Future<String?> markPassengerPickedUp(String id) async {
+    final order = orderById(id);
     final remoteId = _remoteBookingId(id);
+    final remoteRequestId = _remoteRequestId(order?.broadcastGroupId ?? id);
     if (remoteId != null) {
       try {
         await TripApi.instance.advanceBookingStatus(remoteId, 'PASSENGER_PICKED');
+      } on ApiException catch (e) {
+        return e.message;
+      } catch (_) {
+        return tr('Internet aloqasi yo‘q yoki server javob bermadi. Qayta urinib ko‘ring.');
+      }
+    } else if (remoteRequestId != null) {
+      try {
+        // REQUEST_TRANSITIONS CONFIRMED'dan to'g'ridan-to'g'ri
+        // PASSENGER_PICKED'ga o'tishga ruxsat bermaydi — avval DRIVER_ON_WAY
+        // kerak. Agar allaqachon shu holatda bo'lsa, bu chaqiruv (joriy==yangi)
+        // xavfsiz no-op bo'ladi.
+        await RequestApi.instance.setStatus(remoteRequestId, 'DRIVER_ON_WAY');
+        await RequestApi.instance.setStatus(remoteRequestId, 'PASSENGER_PICKED');
       } on ApiException catch (e) {
         return e.message;
       } catch (_) {
@@ -1093,9 +1250,21 @@ class DriverTripService extends ChangeNotifier {
   }) async {
     final order = orderById(id);
     final remoteId = _remoteBookingId(id);
+    final remoteRequestId = _remoteRequestId(order?.broadcastGroupId ?? id);
     if (remoteId != null) {
       try {
         await TripApi.instance.advanceBookingStatus(remoteId, 'COMPLETED');
+      } on ApiException catch (e) {
+        return e.message;
+      } catch (_) {
+        return tr('Internet aloqasi yo‘q yoki server javob bermadi. Qayta urinib ko‘ring.');
+      }
+    } else if (remoteRequestId != null) {
+      try {
+        // PASSENGER_PICKED'dan to'g'ridan-to'g'ri COMPLETED'ga o'tib
+        // bo'lmaydi — avval IN_PROGRESS kerak.
+        await RequestApi.instance.setStatus(remoteRequestId, 'IN_PROGRESS');
+        await RequestApi.instance.setStatus(remoteRequestId, 'COMPLETED');
       } on ApiException catch (e) {
         return e.message;
       } catch (_) {
@@ -1117,6 +1286,7 @@ class DriverTripService extends ChangeNotifier {
               toUserId: order.passengerUserId!,
               stars: driverStars,
               tripId: remoteTripId,
+              requestId: remoteRequestId,
             );
           } catch (_) {}
         }

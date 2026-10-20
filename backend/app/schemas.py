@@ -252,6 +252,9 @@ class RequestOut(BaseModel):
     responses: list[DriverResponseOut] = []
     created_at: datetime
     expires_at: Optional[datetime] = None
+    passenger_name: str = ""
+    passenger_phone: str = ""
+    passenger_photo: Optional[str] = None
 
 
 class DriverApplyIn(BaseModel):

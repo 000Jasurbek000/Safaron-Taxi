@@ -15,14 +15,19 @@ from app.services.serializers import parse_dt, request_out, response_out
 router = APIRouter(prefix="/requests", tags=["requests"])
 
 
-def _build_request_out(db: Session, req: TripRequest) -> RequestOut:
+def _build_request_out(db: Session, req: TripRequest, viewer_driver_id: int | None = None) -> RequestOut:
     responses = []
     for resp in req.responses:
+        if viewer_driver_id is not None and resp.driver_id != viewer_driver_id:
+            # Haydovchiga faqat o'zining javobi ko'rsatiladi — aks holda
+            # raqobatdosh haydovchilarning ismi/telefoni/narxi ochilib qolardi.
+            continue
         driver = db.query(DriverProfile).options(joinedload(DriverProfile.user), joinedload(DriverProfile.vehicle)).filter(DriverProfile.id == resp.driver_id).first()
         if not driver:
             continue
         responses.append(response_out(resp, driver, driver.vehicle, driver.user, req.offered_price))
-    return request_out(req, responses)
+    passenger = db.get(User, req.passenger_id)
+    return request_out(req, responses, passenger)
 
 
 def _expire_if_needed(db: Session, req: TripRequest) -> None:
@@ -125,6 +130,26 @@ def my_requests(user: User = Depends(get_current_user), db: Session = Depends(ge
 def driver_inbox(driver: DriverProfile = Depends(get_approved_driver), db: Session = Depends(get_db)):
     if not driver.is_online:
         return []
+
+    # Bu haydovchi hali javobi bo'lmagan, hali ochiq (SEARCHING) so'rovlarga
+    # "kech qo'shiladi" — aks holda so'rov yaratilgan paytda oflayn bo'lgan
+    # (yoki keyinroq onlaynga o'tgan) haydovchi bu so'rovni abadiy ko'rmay
+    # qolardi, chunki DriverResponse faqat yaratilish daqiqasida online
+    # bo'lganlar uchun qo'shiladi (requests.py: create_request).
+    already = {
+        row[0]
+        for row in db.query(DriverResponse.request_id).filter(DriverResponse.driver_id == driver.id)
+    }
+    open_reqs = db.query(TripRequest).filter(TripRequest.status == "SEARCHING").all()
+    now = datetime.utcnow()
+    for req in open_reqs:
+        if req.id in already:
+            continue
+        if req.expires_at and req.expires_at < now:
+            continue
+        db.add(DriverResponse(request_id=req.id, driver_id=driver.id, status="PENDING"))
+    db.commit()
+
     resp_ids = db.query(DriverResponse.request_id).filter(
         DriverResponse.driver_id == driver.id,
         DriverResponse.status.in_(["PENDING", "ACCEPTED", "SELECTED", "CONFIRMED"]),
@@ -140,8 +165,9 @@ def driver_inbox(driver: DriverProfile = Depends(get_approved_driver), db: Sessi
     out = []
     for r in rows:
         _expire_if_needed(db, r)
-        # Only show this driver's perspective for open requests
-        out.append(_build_request_out(db, r))
+        # Faqat shu haydovchining o'z javobi ko'rsatiladi — boshqa
+        # raqobatdosh haydovchilarning ismi/narxi oshkor bo'lmasin.
+        out.append(_build_request_out(db, r, viewer_driver_id=driver.id))
     db.commit()
     return out
 
@@ -152,11 +178,13 @@ def get_request(request_id: int, user: User = Depends(get_current_user), db: Ses
     if not req:
         raise HTTPException(404, "Ma'lumot topilmadi.")
     driver = db.query(DriverProfile).filter(DriverProfile.user_id == user.id).first()
-    if req.passenger_id != user.id and (not driver or not any(r.driver_id == driver.id for r in req.responses)):
+    is_passenger = req.passenger_id == user.id
+    if not is_passenger and (not driver or not any(r.driver_id == driver.id for r in req.responses)):
         raise HTTPException(403, "Bu amalni bajarish huquqingiz yo‘q.")
     _expire_if_needed(db, req)
     db.commit()
-    return _build_request_out(db, req)
+    viewer_driver_id = driver.id if (driver and not is_passenger) else None
+    return _build_request_out(db, req, viewer_driver_id=viewer_driver_id)
 
 
 @router.post("/{request_id}/respond", response_model=RequestOut)
@@ -184,7 +212,7 @@ def respond(request_id: int, body: DriverRespondIn, driver: DriverProfile = Depe
         assert_transition(DRIVER_RESPONSE_TRANSITIONS, resp.status, "REJECTED")
         resp.status = "REJECTED"
         db.commit()
-        return _build_request_out(db, req)
+        return _build_request_out(db, req, viewer_driver_id=driver.id)
 
     if action != "accept":
         raise HTTPException(400, "action: accept yoki reject.")
@@ -217,7 +245,7 @@ def respond(request_id: int, body: DriverRespondIn, driver: DriverProfile = Depe
     )
     db.commit()
     req = db.query(TripRequest).options(joinedload(TripRequest.responses)).filter(TripRequest.id == request_id).one()
-    return _build_request_out(db, req)
+    return _build_request_out(db, req, viewer_driver_id=driver.id)
 
 
 @router.post("/{request_id}/select", response_model=RequestOut)
@@ -289,7 +317,7 @@ def advance_status(request_id: int, body: StatusUpdateIn, user: User = Depends(g
         driver.total_earnings += price
     db.commit()
     req = db.query(TripRequest).options(joinedload(TripRequest.responses)).filter(TripRequest.id == request_id).one()
-    return _build_request_out(db, req)
+    return _build_request_out(db, req, viewer_driver_id=driver.id)
 
 
 @router.post("/{request_id}/cancel", response_model=OkResponse)
