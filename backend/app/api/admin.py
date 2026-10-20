@@ -9,7 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
-from app.deps import get_current_admin
+from app.deps import get_current_admin, require_super_admin
 from app.models import (
     AdminLog,
     AdminUser,
@@ -973,7 +973,7 @@ def get_settings_admin(admin: AdminUser = Depends(get_current_admin), db: Sessio
 
 
 @router.post("/settings", response_model=OkResponse)
-def set_settings(payload: dict, admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
+def set_settings(payload: dict, admin: AdminUser = Depends(require_super_admin), db: Session = Depends(get_db)):
     for k, v in payload.items():
         row = db.query(SystemSetting).filter(SystemSetting.key == k).first()
         if row:

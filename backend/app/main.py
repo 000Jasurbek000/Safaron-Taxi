@@ -100,11 +100,27 @@ app.include_router(platform_admin.router, prefix="/api")
 _hits: dict[str, list[float]] = defaultdict(list)
 
 
+_admin_hits: dict[str, list[float]] = defaultdict(list)
+
+
 @app.middleware("http")
 async def rate_limit(request: Request, call_next):
-    if request.url.path.startswith("/api/auth"):
-        ip = request.client.host if request.client else "?"
-        now = time.time()
+    path = request.url.path
+    ip = request.client.host if request.client else "?"
+    now = time.time()
+
+    # Admin login — alohida, ancha qattiqroq limit (bu yerga kamdan-kam
+    # kiriladi, shuning uchun parolni zo'rlab topishga urinish ancha oldin
+    # ushlanadi). Avval bu yo'l umuman cheklanmagan edi.
+    if path.startswith("/api/admin/auth"):
+        window = [t for t in _admin_hits[ip] if now - t < 60]
+        if len(window) >= 8:
+            return JSONResponse(status_code=429, content={"detail": "Juda ko‘p urinish. Biroz kuting."})
+        window.append(now)
+        _admin_hits[ip] = window
+        return await call_next(request)
+
+    if path.startswith("/api/auth"):
         window = [t for t in _hits[ip] if now - t < 60]
         if len(window) >= 40:
             return JSONResponse(status_code=429, content={"detail": "Juda ko‘p so‘rov. Biroz kuting."})
