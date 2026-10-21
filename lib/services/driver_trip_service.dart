@@ -92,6 +92,21 @@ class PassengerOrder {
   String get offeredPriceLabel => formatSom(offeredPrice);
   String get priceLabel => formatSom(displayPrice);
 
+  /// Bitta o'rindiq narxini `passengers`ga ko'paytiradi — faqat `instant`
+  /// (e'lon qilingan safarga band qilish) buyurtmalar uchun, chunki
+  /// `offeredPrice`/`agreedPrice` ularda har doim 1 o'rindiq narxi sifatida
+  /// saqlanadi (confirm_trip_screen.dart'dagi hisob bilan bir xil).
+  /// `prebook` so'rovlarida esa `offeredPrice` boshidanoq butun guruh uchun
+  /// bitta umumiy taklif (prebook_screen.dart'da bitta maydon, o'rindiqqa
+  /// bo'linmaydi) — shuning uchun qayta ko'paytirilmaydi.
+  int get totalOfferedPrice => kind == PassengerOrderKind.instant ? offeredPrice * passengers : offeredPrice;
+  int? get totalAgreedPrice =>
+      agreedPrice == null ? null : (kind == PassengerOrderKind.instant ? agreedPrice! * passengers : agreedPrice);
+  int get totalPrice => totalAgreedPrice ?? totalOfferedPrice;
+  String get totalOfferedPriceLabel => formatSom(totalOfferedPrice);
+  String get totalPriceLabel => formatSom(totalPrice);
+  String get totalAgreedPriceLabel => totalAgreedPrice == null ? '' : formatSom(totalAgreedPrice!);
+
   bool get hasCounterOffer =>
       status == PassengerOrderStatus.counterOffered ||
       (agreedPrice != null && agreedPrice != offeredPrice);
@@ -1318,7 +1333,7 @@ class DriverTripService extends ChangeNotifier {
         bookingId: id,
         from: order.from,
         to: order.to,
-        price: order.displayPrice,
+        price: order.totalPrice,
         completedBy: completedBy,
         passengerName: order.passengerName,
         driverName: ProfileService.instance.fullName.isEmpty

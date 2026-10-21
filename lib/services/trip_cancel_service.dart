@@ -170,7 +170,7 @@ class TripCancelService {
     final booking = ActiveBookingService.instance.byId(bookingId);
     final from = order?.from ?? booking?.from ?? '';
     final to = order?.to ?? booking?.to ?? '';
-    final price = order?.displayPrice ?? booking?.offeredPrice ?? booking?.taxi.price ?? 0;
+    final price = order?.totalPrice ?? booking?.offeredPrice ?? booking?.taxi.price ?? 0;
     await TripCompletionService.instance.recordCancellation(
       bookingId: bookingId,
       from: from,

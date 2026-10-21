@@ -215,7 +215,7 @@ class DriverHomeScreen extends StatelessWidget {
                                   ),
                                 ),
                                 const Spacer(),
-                                Text(o.offeredPriceLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, color: AppColors.primary)),
+                                Text(o.totalOfferedPriceLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, color: AppColors.primary)),
                               ],
                             ),
                             const SizedBox(height: 6),

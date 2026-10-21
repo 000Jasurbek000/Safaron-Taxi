@@ -479,7 +479,15 @@ class ActiveBookingService extends ChangeNotifier {
 
     final trip = row['trip'] as Map<String, dynamic>;
     final agreedPrice = row['agreed_price'] as int?;
-    final taxi = TripCatalogService.fromApi(trip).copyWith(price: agreedPrice ?? trip['price'] as int);
+    // `trip.price`/`booking.agreed_price` serverda HAR DOIM 1 o'rindiq uchun
+    // narx sifatida saqlanadi (confirm_trip_screen.dart'dagi "N kishi × narx"
+    // hisob-kitobi bilan bir xil) — shu safar necha o'rindiq band
+    // qilinganiga (`row['seats']`) ko'paytirmasak, band qilish bir nechta
+    // o'rindiqni qamrab olganda ham narx maydonida bitta o'rindiqlik summa
+    // ko'rinardi.
+    final seats = row['seats'] as int? ?? b.seats;
+    final unitPrice = agreedPrice ?? trip['price'] as int;
+    final taxi = TripCatalogService.fromApi(trip).copyWith(price: unitPrice * seats);
 
     switch (status) {
       case 'COUNTERED':
@@ -487,8 +495,8 @@ class ActiveBookingService extends ChangeNotifier {
           await setCounterOffer(
             bookingId: b.id,
             taxi: taxi,
-            counterPrice: agreedPrice,
-            offeredPrice: trip['price'] as int,
+            counterPrice: agreedPrice * seats,
+            offeredPrice: (trip['price'] as int) * seats,
           );
         }
         break;

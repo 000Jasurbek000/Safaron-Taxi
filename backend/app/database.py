@@ -62,6 +62,16 @@ def ensure_columns() -> None:
                 if col not in have:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
 
+        # Mavjud (ilgari deploy qilingan) bazalarda hali ham eski
+        # (trip_id, passenger_id) UNIQUE cheklovi bo'lishi mumkin — uni olib
+        # tashlaymiz, aks holda models.py'dan o'chirilgan bo'lsa ham eski
+        # bazada hali amal qilib, qayta band qilishni bloklab turaveradi.
+        # SQLite ALTER TABLE orqali cheklov o'chirishni qo'llab-quvvatlamaydi
+        # (jadvalni to'liq qayta qurishni talab qiladi) — bu faqat lokal/test
+        # bazalar uchun, ular bir martalik bo'lgani uchun o'tkazib yuboriladi.
+        if "trip_bookings" in names and engine.dialect.name == "postgresql":
+            conn.execute(text("ALTER TABLE trip_bookings DROP CONSTRAINT IF EXISTS uq_trip_passenger"))
+
 
 def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()

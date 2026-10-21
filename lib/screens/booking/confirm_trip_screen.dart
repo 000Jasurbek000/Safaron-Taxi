@@ -39,6 +39,7 @@ class ConfirmTripScreen extends StatefulWidget {
 class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
   late int _seats;
   late final bool _isOpenTrip;
+  late final bool _pickupPreSupplied;
   bool _confirming = false;
   final _note = TextEditingController();
   final _offeredPrice = TextEditingController();
@@ -60,10 +61,15 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
         : widget.taxi.to;
     _from = TextEditingController(text: fromInit);
     _to = TextEditingController(text: toInit);
-    final pickup = widget.exactPickup.trim().isNotEmpty
-        ? widget.exactPickup.trim()
-        : (fromInit.isNotEmpty ? fromInit : widget.taxi.from);
-    _pickup = TextEditingController(text: pickup);
+    // Faqat qidiruv bosqichida haqiqatan ham aniq manzil kiritilgan bo'lsa
+    // (masalan bosh sahifadagi "Qayerdan?" oqimi) shuni ko'rsatamiz va
+    // o'zgartirishga ruxsat bermaymiz. Aks holda (masalan pastdagi "Taksi
+    // topish" ro'yxatidan to'g'ridan-to'g'ri band qilganda) bu safargacha
+    // hech qanday aniq manzil yig'ilmagan — maydon bo'sh va tahrirlanadigan
+    // bo'lib qolishi, "Safarni tasdiqlash" esa shu maydon to'ldirilmaguncha
+    // bloklanishi kerak (pastdagi `_pickupSupplied` orqali).
+    _pickupPreSupplied = widget.exactPickup.trim().isNotEmpty;
+    _pickup = TextEditingController(text: widget.exactPickup.trim());
     _offeredPrice.addListener(() {
       if (mounted) setState(() {});
     });
@@ -344,7 +350,7 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                         const SizedBox(height: 8),
                         TextField(
                           controller: _pickup,
-                          readOnly: !_isOpenTrip,
+                          readOnly: _pickupPreSupplied,
                           decoration: InputDecoration(
                             filled: true,
                             fillColor: AppColors.surface,
@@ -358,7 +364,7 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                           ),
                           style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.navy),
                         ),
-                        if (!_isOpenTrip)
+                        if (_pickupPreSupplied)
                           Text(
                             tr('Taksi qidirishda kiritilgan manzil · o‘zgartirib bo‘lmaydi'),
                             style: GoogleFonts.montserrat(fontSize: 10, color: AppColors.textMuted),
@@ -490,6 +496,12 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                             return;
                           }
                           bookTaxi = taxi.copyWith(from: from, to: to);
+                        }
+                        if (_pickup.text.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(tr('Aniq manzil kiriting')), behavior: SnackBarBehavior.floating),
+                          );
+                          return;
                         }
                         if (_needsPrice) {
                           final offered = _offeredUnitPrice;

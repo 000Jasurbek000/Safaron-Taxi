@@ -191,7 +191,7 @@ class _OrderCard extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(err ?? tr('Qabul qilindi · yo‘lovchi narxi: {price}').replaceAll('{price}', order.offeredPriceLabel)),
+        content: Text(err ?? tr('Qabul qilindi · yo‘lovchi narxi: {price}').replaceAll('{price}', order.totalOfferedPriceLabel)),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -232,7 +232,7 @@ class _OrderCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(tr('Yo‘lovchi taklifi'), style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
-                    Text(order.offeredPriceLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 20, color: const Color(0xFF2C4A6E))),
+                    Text(order.totalOfferedPriceLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 20, color: const Color(0xFF2C4A6E))),
                   ],
                 ),
               ),
@@ -539,7 +539,7 @@ class _PriceBlock extends StatelessWidget {
           children: [
             Text(tr('YO‘LOVCHI NARXI'), style: GoogleFonts.montserrat(fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.4, color: accent)),
             const SizedBox(height: 2),
-            Text(order.offeredPriceLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 22, color: accent)),
+            Text(order.totalOfferedPriceLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 22, color: accent)),
             Text(
               tr('Shu summani qabul qiling yoki pastroq/yuqoriroq o‘z narxingizni yozing'),
               style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted, height: 1.3),
@@ -570,7 +570,7 @@ class _PriceBlock extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(tr('Yo‘lovchi taklifi'), style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted)),
-                      Text(order.offeredPriceLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.navy, decoration: TextDecoration.lineThrough)),
+                      Text(order.totalOfferedPriceLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.navy, decoration: TextDecoration.lineThrough)),
                     ],
                   ),
                 ),
@@ -580,7 +580,7 @@ class _PriceBlock extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(tr('Sizning narxingiz'), style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted)),
-                      Text(order.agreedPriceLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 16, color: const Color(0xFFE65100))),
+                      Text(order.totalAgreedPriceLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 16, color: const Color(0xFFE65100))),
                     ],
                   ),
                 ),
@@ -602,7 +602,7 @@ class _PriceBlock extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(tr('KELISHILGAN NARX'), style: GoogleFonts.montserrat(fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.4, color: AppColors.primaryDark)),
-          Text(order.offeredPriceLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 20, color: AppColors.primaryDark)),
+          Text(order.totalOfferedPriceLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 20, color: AppColors.primaryDark)),
           Text(tr('Yo‘lovchi taklifiga mos keldi'), style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted)),
         ],
       ),

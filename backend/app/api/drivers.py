@@ -245,7 +245,9 @@ def earnings(driver: DriverProfile = Depends(get_approved_driver), db: Session =
         return sum((r.agreed_price or r.offered_price) for r in request_rows if pred(r.updated_at))
 
     def booking_sum(pred):
-        return sum((b.agreed_price or 0) for b in booking_rows if pred(b.completed_at or b.created_at))
+        # agreed_price 1 o'rindiq narxi — jami daromad uchun o'rindiqlar
+        # soniga ko'paytiriladi (trips.py: advance_booking_status bilan bir xil).
+        return sum((b.agreed_price or 0) * b.seats for b in booking_rows if pred(b.completed_at or b.created_at))
 
     def is_today(dt):
         return dt is not None and dt.date() == today

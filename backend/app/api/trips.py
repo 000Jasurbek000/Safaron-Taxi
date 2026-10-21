@@ -192,7 +192,21 @@ def book_trip(trip_id: int, body: BookTripIn, user: User = Depends(get_current_u
         raise HTTPException(400, "Safar vaqti o‘tgan.")
     if body.seats > trip.seats_available:
         raise HTTPException(400, "Bo‘sh joy yetarli emas.")
-    exists = db.query(TripBooking).filter(TripBooking.trip_id == trip.id, TripBooking.passenger_id == user.id).first()
+    # Faqat FAOL (hali yakunlanmagan) band qilish bloklaydi — rad etilgan,
+    # bekor qilingan, muddati o'tgan yoki allaqachon yakunlangan eski band
+    # qilish shu passenger uchun ushbu safarni abadiy qayta band qilib
+    # bo'lmaydigan qilib qo'ymasligi kerak (masalan avval rad etilgandan
+    # keyin qayta urinish, yoki safar bo'yicha oldingi safar yakunlangandan
+    # keyin yana bo'sh joy bo'lsa qayta band qilish).
+    exists = (
+        db.query(TripBooking)
+        .filter(
+            TripBooking.trip_id == trip.id,
+            TripBooking.passenger_id == user.id,
+            TripBooking.status.in_(["PENDING", "COUNTERED", "CONFIRMED", "DRIVER_ON_WAY", "PASSENGER_PICKED"]),
+        )
+        .first()
+    )
     if exists:
         if exists.status in ("PENDING", "COUNTERED"):
             raise HTTPException(400, "Siz bu safarga allaqachon so‘rov yubordingiz — javobni kuting.")
@@ -478,7 +492,12 @@ def advance_booking_status(
             )
 
     if new == "COMPLETED" and trip_driver:
-        price = booking.agreed_price or (trip.price if trip else 0)
+        # agreed_price/trip.price har doim 1 o'rindiq narxi — shu band
+        # qilish necha o'rindiqni egallagani (booking.seats) bilan
+        # ko'paytirmasak, 1 dan ortiq o'rindiq band qilingan safarlar uchun
+        # haydovchi daromadi kam hisoblanib qolardi.
+        unit_price = booking.agreed_price or (trip.price if trip else 0)
+        price = unit_price * booking.seats
         trip_driver.trips_count += 1
         trip_driver.total_earnings += price
     db.commit()

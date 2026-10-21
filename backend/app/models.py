@@ -197,7 +197,13 @@ class TripBooking(Base):
     """Tayyor safarga joy band qilish."""
 
     __tablename__ = "trip_bookings"
-    __table_args__ = (UniqueConstraint("trip_id", "passenger_id", name="uq_trip_passenger"),)
+    # Qasddan (trip_id, passenger_id) uchun UNIQUE cheklov YO'Q — bir
+    # yo'lovchi shu safarga avval rad etilgan/bekor qilingan/yakunlangan
+    # band qilishdan keyin, bo'sh joy qolgan bo'lsa, QAYTA band qila olishi
+    # kerak (trips.py: book_trip faqat FAOL statusdagi mavjud band
+    # qilishni tekshiradi). Avval bu yerda shunday cheklov bor edi va u
+    # yo'lovchini shu safarga abadiy (hatto rad etilgandan ancha keyin ham)
+    # qayta band qila olmaydigan qilib qo'ygan edi.
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     trip_id: Mapped[int] = mapped_column(ForeignKey("trips.id"), index=True)

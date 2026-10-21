@@ -6,7 +6,6 @@ import '../../services/driver_trip_service.dart';
 import '../../services/safaron_api.dart';
 import '../../services/trip_completion_service.dart';
 import '../../theme/app_colors.dart';
-import '../../utils/money.dart';
 import '../../widgets/app_ui.dart';
 import '../../widgets/rating_dialog.dart';
 import '../../widgets/safaron_header.dart';
@@ -110,7 +109,7 @@ class DriverTripsArchiveScreen extends StatelessWidget {
                                   ),
                                 ),
                                 const Spacer(),
-                                Text(formatSom(o.displayPrice), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, color: AppColors.primaryDark)),
+                                Text(o.totalPriceLabel, style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, color: AppColors.primaryDark)),
                               ],
                             ),
                             const SizedBox(height: 6),
