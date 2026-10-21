@@ -7,6 +7,7 @@ import 'screens/home/main_shell.dart';
 import 'screens/welcome_screen.dart';
 import 'services/active_booking_service.dart';
 import 'services/api_client.dart';
+import 'services/app_refresh.dart';
 import 'services/auth_service.dart';
 import 'services/chat_service.dart';
 import 'services/driver_trip_service.dart';
@@ -65,8 +66,39 @@ void main() async {
   runApp(const SafaronApp());
 }
 
-class SafaronApp extends StatelessWidget {
+class SafaronApp extends StatefulWidget {
   const SafaronApp({super.key});
+
+  @override
+  State<SafaronApp> createState() => _SafaronAppState();
+}
+
+class _SafaronAppState extends State<SafaronApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Ilova fondan (ekran qulflash, boshqa ilovaga o'tish) qaytganda darhol
+  // qayta so'rov yuboramiz. Android ko'pincha fondagi ilovaning Timer'larini
+  // to'xtatib/kechiktirib qo'yadi — shunga qaramay bu hech qachon qo'yilmagan
+  // edi, shuning uchun haydovchi javob bergan/buyurtma holati o'zgargan
+  // bo'lsa ham, foreground'ga qaytgandan keyin ekran navbatdagi tasodifiy
+  // timer tikigigacha eskirgan holatda "qotib" qolgandek ko'rinaverardi.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // ignore: unawaited_futures
+      AppRefresh.run();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

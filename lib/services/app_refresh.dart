@@ -22,6 +22,11 @@ class AppRefresh {
       _ok(TripCatalogService.instance.refresh()),
       _ok(PlatformConfigService.instance.load()),
       _ok(ActiveBookingService.instance.load()),
+      // `load()` o'zi birinchi chaqiruvdan keyin no-op bo'lib qoladi (xizmat
+      // allaqachon yuklangan bo'lsa) — shuning uchun pastga tortib
+      // yangilash yoki ilova fondan qaytganda faol bronning HAQIQIY
+      // server holatini qayta tekshirish uchun alohida chaqiramiz.
+      _ok(ActiveBookingService.instance.refreshNow()),
       _ok(ChatService.instance.load()),
       _ok(ChatService.instance.syncAllFromServer()),
       _ok(DriverTripService.instance.load()),

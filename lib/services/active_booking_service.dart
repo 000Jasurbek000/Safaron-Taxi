@@ -391,6 +391,26 @@ class ActiveBookingService extends ChangeNotifier {
 
   Timer? _fastPollTimer;
 
+  /// Navbatdagi timer tikigini kutmasdan barcha faol bronlar holatini
+  /// darhol serverdan qayta tekshiradi. `load()` dagi `_armTick()` dan farqli
+  /// o'laroq `_loaded` guard'siz, istalgan vaqt qayta chaqirilishi mumkin —
+  /// ilova fondan (ekran qulflash, boshqa ilovaga o'tish) qaytganda ishlatish
+  /// uchun: Android ko'pincha fonga ketgan ilovaning Timer'larini to'xtatib
+  /// qo'yadi, shuning uchun foreground'ga qaytganda darhol qayta so'rov
+  /// yubormasak, haydovchi allaqachon javob bergan bo'lsa ham "kutyapmiz"
+  /// oynasi keyingi tasodifiy tikikkacha "qotib" qolgandek ko'rinaveradi.
+  Future<void> refreshNow() async {
+    await _expireInactiveInstant();
+    await _pollRemoteBookings(const {
+      BookingStatus.waiting,
+      BookingStatus.counterOffer,
+      BookingStatus.confirmed,
+      BookingStatus.onWay,
+      BookingStatus.pickedUp,
+    });
+    notifyListeners();
+  }
+
   void _armTick() {
     _tickTimer?.cancel();
     _tickTimer = Timer.periodic(const Duration(seconds: 30), (_) {
