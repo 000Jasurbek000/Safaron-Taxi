@@ -327,6 +327,17 @@ class DriverTripService extends ChangeNotifier {
   Timer? _expiryTimer;
   Timer? _heartbeatTimer;
   Timer? _inboxPollTimer;
+
+  /// `pollInbox()` bir vaqtning o'zida bir nechta joydan (oddiy 7s taymer,
+  /// `AppRefresh.run()` ilova fondan qaytganda, pastga tortib yangilash)
+  /// chaqirilishi mumkin. Agar ESKI so'rovning javobi YANGI so'rov
+  /// yuborilgandan KEYIN kelsa (tarmoq kechikishi tasodifiy tartibni
+  /// buzsa), eski (allaqachon eskirgan) javob yangi ma'lumotni qayta yozib
+  /// yuborib, tasdiqlangan buyurtmani bir lahzaga "yo'qolib" ko'rsatib
+  /// yuborishi mumkin edi. Har bir pollInbox() chaqiruvi o'zining avlod
+  /// raqamini oladi — javob qaytganda bu hali ENG YANGISIMI tekshiriladi,
+  /// aks holda natija e'tiborsiz qoldiriladi.
+  int _pollGeneration = 0;
   String? _lastPassengerNotice;
   String? _lastDriverNotice;
 
@@ -695,15 +706,20 @@ class DriverTripService extends ChangeNotifier {
 
   Future<void> pollInbox() async {
     if (!AuthService.instance.registered) return;
+    final myGen = ++_pollGeneration;
     try {
       final rows = await TripApi.instance.bookingsInbox();
+      // Shu kutish paytida yana yangiroq pollInbox() boshlangan bo'lsa, bu
+      // javob endi eskirgan — qo'llamaymiz (pastdagi izohga qarang).
+      if (myGen != _pollGeneration) return;
       for (final row in rows) {
         await addPassengerOrder(_orderFromServerRow(row));
       }
     } catch (_) {
       // Internet yo'q yoki server javob bermadi — mahalliy ro'yxat o'zgarishsiz qoladi.
     }
-    await _pollPrebookInbox();
+    if (myGen != _pollGeneration) return;
+    await _pollPrebookInbox(myGen);
   }
 
   /// Oldindan bron so'rovlarini serverdan tortadi. Bitta so'rovga bir nechta
@@ -712,9 +728,10 @@ class DriverTripService extends ChangeNotifier {
   /// uchun `/inbox`da ko'rsatmaydi; shuni "poll'dan tushib qoldi" deb bilib,
   /// mahalliy nusxasini yopamiz (aks holda "qabul qilindi" degan abadiy
   /// noto'g'ri holatda osilib qolardi).
-  Future<void> _pollPrebookInbox() async {
+  Future<void> _pollPrebookInbox(int myGen) async {
     try {
       final rows = await RequestApi.instance.inbox();
+      if (myGen != _pollGeneration) return;
       final seenIds = <String>{};
       var droppedAny = false;
       for (final row in rows) {
