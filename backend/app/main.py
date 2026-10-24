@@ -1,6 +1,8 @@
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import ENCODERS_BY_TYPE
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,6 +16,22 @@ from app.config import get_settings
 from app.database import Base, SessionLocal, engine, ensure_columns
 from app.seed import seed
 from app.services.error_log import log_error
+
+# Pydantic javoblari app/schemas.py'dagi `UTCModel` orqali to'g'rilanadi
+# (bu yerga qarang: `class UTCModel`'ning izohi). Lekin ba'zi endpointlar
+# (asosan admin.py'dagi) Pydantic schema emas, xom `dict` qaytaradi —
+# bunday javoblar FastAPI'ning `jsonable_encoder` orqali (response_model
+# yo'q bo'lgani uchun) serializatsiya qilinadi, bu esa `ENCODERS_BY_TYPE`
+# ro'yxatiga qaraydi. Shu yerda ham xuddi shunday UTC-aniqlashni
+# qo'shamiz — aks holda admin panelidagi xom-dict javoblarda ham xuddi
+# shu vaqt-mintaqasi xatosi qolib ketardi.
+def _utc_isoformat(dt: datetime) -> str:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat()
+
+
+ENCODERS_BY_TYPE[datetime] = _utc_isoformat
 
 settings = get_settings()
 Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)

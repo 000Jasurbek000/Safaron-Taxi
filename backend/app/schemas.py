@@ -1,36 +1,58 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class ApiError(BaseModel):
+class UTCModel(BaseModel):
+    """Chiquvchi `datetime` maydonlarini aniq UTC deb belgilaydi.
+
+    Backend hamma joyda `datetime.utcnow()` (naiv, lekin UTC qiymatni
+    ifodalovchi) ishlatadi. Pydantic'ning standart JSON chiqishi esa bunday
+    naiv datetime'larni hech qanday vaqt mintaqasi belgisisiz ("Z" yoki
+    "+00:00" yo'q) qatorga aylantiradi. Flutter tomonida `DateTime.parse()`
+    belgisiz ISO qatorni MAHALLIY vaqt deb o'qiydi — Toshkentda (UTC+5) bu
+    har qanday server vaqtini haqiqiy mahalliy soatdan 5 soat "orqada"
+    ko'rsatib yuboradi, va shu sababli masalan 1 soatlik "haydovchi javob
+    bermadi" muddati bron yaratilgan zahotiyoq "allaqachon o'tgan" bo'lib
+    chiqadi. Shu klass har bir chiquvchi datetime'ni aniq UTC deb
+    belgilab beradi.
+    """
+
+    model_config = ConfigDict(
+        json_encoders={
+            datetime: lambda v: v.replace(tzinfo=timezone.utc).isoformat() if v.tzinfo is None else v.isoformat()
+        }
+    )
+
+
+class ApiError(UTCModel):
     detail: str
     code: Optional[str] = None
 
 
-class OkResponse(BaseModel):
+class OkResponse(UTCModel):
     ok: bool = True
     message: Optional[str] = None
 
 
-class TokenResponse(BaseModel):
+class TokenResponse(UTCModel):
     access_token: str
     token_type: str = "bearer"
     user: "UserOut"
 
 
-class SendOtpIn(BaseModel):
+class SendOtpIn(UTCModel):
     phone: str
 
 
-class SendOtpOut(BaseModel):
+class SendOtpOut(UTCModel):
     ok: bool = True
     message: Optional[str] = None
     user_exists: bool = False
 
 
-class VerifyOtpIn(BaseModel):
+class VerifyOtpIn(UTCModel):
     phone: str
     code: str
     first_name: Optional[str] = None
@@ -38,14 +60,14 @@ class VerifyOtpIn(BaseModel):
     referral_code: Optional[str] = None
 
 
-class SignInIn(BaseModel):
+class SignInIn(UTCModel):
     phone: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     referral_code: Optional[str] = None
 
 
-class PhoneLookupOut(BaseModel):
+class PhoneLookupOut(UTCModel):
     exists: bool
     first_name: str = ""
     last_name: str = ""
@@ -54,7 +76,7 @@ class PhoneLookupOut(BaseModel):
     active_role: str = "passenger"
 
 
-class UserOut(BaseModel):
+class UserOut(UTCModel):
     id: int
     phone: str
     phone_display: str
@@ -80,26 +102,26 @@ class UserOut(BaseModel):
         from_attributes = True
 
 
-class RoleIn(BaseModel):
+class RoleIn(UTCModel):
     role: str  # passenger|driver
 
 
-class LanguageIn(BaseModel):
+class LanguageIn(UTCModel):
     language: str
 
 
-class ProfileUpdateIn(BaseModel):
+class ProfileUpdateIn(UTCModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     experience_years: Optional[int] = Field(default=None, ge=0, le=60)
 
 
-class ChangePhoneIn(BaseModel):
+class ChangePhoneIn(UTCModel):
     phone: str
     code: str
 
 
-class LocationOut(BaseModel):
+class LocationOut(UTCModel):
     id: int
     name: str
     type: str
@@ -114,7 +136,7 @@ class LocationOut(BaseModel):
         from_attributes = True
 
 
-class LocationCreateIn(BaseModel):
+class LocationCreateIn(UTCModel):
     name: str
     type: str = "other"
     description: Optional[str] = None
@@ -124,7 +146,7 @@ class LocationCreateIn(BaseModel):
     aliases: list[str] = []
 
 
-class TripCreateIn(BaseModel):
+class TripCreateIn(UTCModel):
     from_location_id: Optional[int] = None
     to_location_id: Optional[int] = None
     from_text: str
@@ -137,7 +159,7 @@ class TripCreateIn(BaseModel):
     note: Optional[str] = None
 
 
-class TripOut(BaseModel):
+class TripOut(UTCModel):
     id: int
     driver_id: int
     driver_user_id: Optional[int] = None
@@ -163,12 +185,12 @@ class TripOut(BaseModel):
     created_at: datetime
 
 
-class BookTripIn(BaseModel):
+class BookTripIn(UTCModel):
     seats: int = Field(default=1, ge=1, le=15)
     note: Optional[str] = None
 
 
-class TripBookingOut(BaseModel):
+class TripBookingOut(UTCModel):
     id: int
     trip_id: int
     passenger_id: int
@@ -191,7 +213,7 @@ class TripBookingOut(BaseModel):
     passenger_photo: Optional[str] = None
 
 
-class RequestCreateIn(BaseModel):
+class RequestCreateIn(UTCModel):
     from_location_id: Optional[int] = None
     to_location_id: Optional[int] = None
     from_text: str
@@ -204,22 +226,22 @@ class RequestCreateIn(BaseModel):
     offered_price: int = Field(ge=1000)
 
 
-class DriverRespondIn(BaseModel):
+class DriverRespondIn(UTCModel):
     action: str  # accept|reject
     offered_price: Optional[int] = Field(default=None, ge=1000)
     message: Optional[str] = None
     eta_minutes: Optional[int] = Field(default=None, ge=1, le=300)
 
 
-class SelectDriverIn(BaseModel):
+class SelectDriverIn(UTCModel):
     driver_id: int
 
 
-class CancelIn(BaseModel):
+class CancelIn(UTCModel):
     reason: str
 
 
-class DriverResponseOut(BaseModel):
+class DriverResponseOut(UTCModel):
     id: int
     driver_id: int
     driver_name: str
@@ -236,7 +258,7 @@ class DriverResponseOut(BaseModel):
     final_price: int
 
 
-class RequestOut(BaseModel):
+class RequestOut(UTCModel):
     id: int
     passenger_id: int
     from_text: str
@@ -258,7 +280,7 @@ class RequestOut(BaseModel):
     passenger_photo: Optional[str] = None
 
 
-class DriverApplyIn(BaseModel):
+class DriverApplyIn(UTCModel):
     experience_years: int = Field(ge=0, le=60)
     model_name: str
     plate: str
@@ -266,18 +288,18 @@ class DriverApplyIn(BaseModel):
     color: Optional[str] = None
 
 
-class OnlineIn(BaseModel):
+class OnlineIn(UTCModel):
     is_online: bool
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
 
-class HeartbeatIn(BaseModel):
+class HeartbeatIn(UTCModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
 
-class NotificationOut(BaseModel):
+class NotificationOut(UTCModel):
     id: int
     title: str
     body: str
@@ -288,14 +310,14 @@ class NotificationOut(BaseModel):
     created_at: datetime
 
 
-class MessageIn(BaseModel):
+class MessageIn(UTCModel):
     body: str
     request_id: Optional[int] = None
     trip_id: Optional[int] = None
     receiver_id: int
 
 
-class MessageOut(BaseModel):
+class MessageOut(UTCModel):
     id: int
     sender_id: int
     receiver_id: int
@@ -306,7 +328,7 @@ class MessageOut(BaseModel):
     trip_id: Optional[int] = None
 
 
-class RatingIn(BaseModel):
+class RatingIn(UTCModel):
     request_id: Optional[int] = None
     trip_id: Optional[int] = None
     to_user_id: int
@@ -314,12 +336,12 @@ class RatingIn(BaseModel):
     comment: Optional[str] = None
 
 
-class AdminLoginIn(BaseModel):
+class AdminLoginIn(UTCModel):
     phone: str
     password: str
 
 
-class AdminOut(BaseModel):
+class AdminOut(UTCModel):
     id: int
     phone: str
     email: Optional[str] = None
@@ -329,36 +351,36 @@ class AdminOut(BaseModel):
     created_at: Optional[datetime] = None
 
 
-class AdminTokenOut(BaseModel):
+class AdminTokenOut(UTCModel):
     access_token: str
     token_type: str = "bearer"
     admin: AdminOut
 
 
-class AdminProfileUpdateIn(BaseModel):
+class AdminProfileUpdateIn(UTCModel):
     full_name: Optional[str] = Field(default=None, min_length=2, max_length=120)
     email: Optional[str] = None
     phone: Optional[str] = None
 
 
-class AdminPasswordChangeIn(BaseModel):
+class AdminPasswordChangeIn(UTCModel):
     current_password: str
     new_password: str
     confirm_password: str
 
 
-class StatusUpdateIn(BaseModel):
+class StatusUpdateIn(UTCModel):
     status: str
     reason: Optional[str] = None
 
 
-class UserUpdateIn(BaseModel):
+class UserUpdateIn(UTCModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     phone: Optional[str] = None
 
 
-class TripUpdateIn(BaseModel):
+class TripUpdateIn(UTCModel):
     from_text: Optional[str] = None
     to_text: Optional[str] = None
     scheduled_at: Optional[datetime] = None
@@ -367,7 +389,7 @@ class TripUpdateIn(BaseModel):
     note: Optional[str] = None
 
 
-class RequestUpdateIn(BaseModel):
+class RequestUpdateIn(UTCModel):
     from_text: Optional[str] = None
     to_text: Optional[str] = None
     exact_place: Optional[str] = None
@@ -378,14 +400,14 @@ class RequestUpdateIn(BaseModel):
     note: Optional[str] = None
 
 
-class ClientErrorIn(BaseModel):
+class ClientErrorIn(UTCModel):
     message: str
     detail: Optional[str] = None
     path: Optional[str] = None
     app_version: Optional[str] = None
 
 
-class ErrorLogOut(BaseModel):
+class ErrorLogOut(UTCModel):
     id: int
     source: str
     message: str
@@ -399,7 +421,7 @@ class ErrorLogOut(BaseModel):
         from_attributes = True
 
 
-class NotifyBroadcastIn(BaseModel):
+class NotifyBroadcastIn(UTCModel):
     title: str
     body: str
     audience: str = "all"  # all|drivers|passengers|user
