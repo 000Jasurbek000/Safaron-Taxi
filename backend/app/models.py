@@ -43,6 +43,10 @@ class User(Base):
     referred_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     telegram_username: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     verified_trip_count: Mapped[int] = mapped_column(Integer, default=0)
+    # Faqat yo'lovchi tomonidan yoqiladi — yoqilsa, haydovchilarga bu
+    # foydalanuvchining telefon raqami hech qayerda (band qilish/so'rov
+    # tafsilotlarida) to'liq ko'rinmaydi, faqat "+998***" shaklida.
+    hide_phone: Mapped[bool] = mapped_column(Boolean, default=False)
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
@@ -220,6 +224,8 @@ class TripBooking(Base):
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    exact_pickup: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     trip: Mapped[Trip] = relationship(back_populates="bookings")
 

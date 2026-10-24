@@ -24,6 +24,7 @@ class AuthUser {
     this.carSeats,
     this.carPhoto,
     this.carColor,
+    this.hidePhone = false,
   });
 
   final int id;
@@ -45,6 +46,7 @@ class AuthUser {
   final int? carSeats;
   final String? carPhoto;
   final String? carColor;
+  final bool hidePhone;
 
   factory AuthUser.fromJson(Map<String, dynamic> j) => AuthUser(
         id: (j['id'] as num?)?.toInt() ?? 0,
@@ -66,6 +68,7 @@ class AuthUser {
         carSeats: j['car_seats'] as int?,
         carPhoto: j['car_photo'] as String?,
         carColor: j['car_color'] as String?,
+        hidePhone: j['hide_phone'] as bool? ?? false,
       );
 }
 
@@ -246,6 +249,15 @@ class AuthService extends ChangeNotifier {
     };
     if (experienceYears != null) body['experience_years'] = experienceYears;
     final data = await ApiClient.instance.patch('/api/users/me', body: body);
+    user = AuthUser.fromJson(data as Map<String, dynamic>);
+    notifyListeners();
+  }
+
+  /// Faqat yo'lovchi uchun — yoqilsa, haydovchilarga telefon raqami
+  /// "+998***" shaklida ko'rsatiladi, chaqirish tugmasi ishlamaydi,
+  /// faqat ilova ichidagi yozishma qoladi.
+  Future<void> setHidePhone(bool value) async {
+    final data = await ApiClient.instance.patch('/api/users/me', body: {'hide_phone': value});
     user = AuthUser.fromJson(data as Map<String, dynamic>);
     notifyListeners();
   }

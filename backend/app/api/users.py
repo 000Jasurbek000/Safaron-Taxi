@@ -36,6 +36,8 @@ def update_me(body: ProfileUpdateIn, user: User = Depends(get_current_user), db:
         if not user.driver_profile:
             raise HTTPException(400, "Tajriba faqat haydovchi profilida saqlanadi.")
         user.driver_profile.experience_years = body.experience_years
+    if body.hide_phone is not None:
+        user.hide_phone = body.hide_phone
     db.commit()
     user = db.query(User).options(joinedload(User.driver_profile)).filter(User.id == user.id).one()
     return user_out(user)

@@ -81,6 +81,11 @@ class PassengerOrder {
   final int? passengerUserId;
   final String? passengerPhoto;
 
+  /// Yo'lovchi "raqamimni yashirish"ni yoqqan bo'lsa, server
+  /// `passengerPhone`ni "+998***" shaklida yuboradi — qo'ng'iroq tugmasini
+  /// shu belgiga qarab o'chiramiz.
+  bool get passengerPhoneHidden => passengerPhone.contains('*');
+
   String get routeLabel {
     if (from.isEmpty && to.isEmpty) return 'Taksi';
     if (from.isEmpty) return to;
@@ -341,13 +346,6 @@ class DriverTripService extends ChangeNotifier {
   String? _lastPassengerNotice;
   String? _lastDriverNotice;
 
-  /// Oldindan bron so'rovi ketma-ket necha marta "poll'dan tushib qoldi"
-  /// deb topilganini sanaydi — bitta vaqtinchalik bo'sh javob (masalan
-  /// `is_online` holati bir lahza noto'g'ri ko'ringanda) darhol "bekor
-  /// qilindi" deb ko'rsatib yubormasligi uchun ikki marta ketma-ket
-  /// tasdiqlanishi talab qilinadi.
-  final Map<String, int> _missedPrebookPolls = {};
-
   int? _remoteBookingId(String orderId) {
     if (!orderId.startsWith('inst_')) return null;
     return int.tryParse(orderId.substring(5));
@@ -516,7 +514,6 @@ class DriverTripService extends ChangeNotifier {
     _inboxPollTimer = null;
     orders = [];
     myTrips = [];
-    _missedPrebookPolls.clear();
     await _persistOrders();
     await _persistTrips();
     notifyListeners();
@@ -712,8 +709,43 @@ class DriverTripService extends ChangeNotifier {
       // Shu kutish paytida yana yangiroq pollInbox() boshlangan bo'lsa, bu
       // javob endi eskirgan — qo'llamaymiz (pastdagi izohga qarang).
       if (myGen != _pollGeneration) return;
+      final seenIds = <String>{};
       for (final row in rows) {
-        await addPassengerOrder(_orderFromServerRow(row));
+        final order = _orderFromServerRow(row);
+        seenIds.add(order.id);
+        await addPassengerOrder(order);
+      }
+      // Yo'lovchi hali haydovchi javob bermasdan oldin band qilishni bekor
+      // qilsa (yoki muddati o'tsa), bu band qilish endi `/inbox`da
+      // ko'rinmaydi — shuni mahalliyda ham "bekor qilindi" deb belgilaymiz,
+      // aks holda eski so'rov haydovchi ekranida abadiy osilib qolardi.
+      // Faqat ONLAYN paytda ishlatiladi — oflaynda PENDING qatorlar
+      // backend tomonidan ataylab yashirilgani uchun (yangi ish
+      // ko'rsatilmasligi kerak), "yo'qligi" u yerda hali bekor qilindi
+      // degani emas.
+      if (isOnline) {
+        final staleIds = orders
+            .where((o) =>
+                o.kind == PassengerOrderKind.instant &&
+                _isForMe(o) &&
+                (o.status == PassengerOrderStatus.open ||
+                    o.status == PassengerOrderStatus.counterOffered ||
+                    o.status == PassengerOrderStatus.accepted ||
+                    o.status == PassengerOrderStatus.onWay) &&
+                !seenIds.contains(o.id))
+            .map((o) => o.id)
+            .toList();
+        if (staleIds.isNotEmpty) {
+          orders = [
+            for (final o in orders)
+              if (staleIds.contains(o.id))
+                o.copyWith(status: PassengerOrderStatus.cancelled)
+              else
+                o,
+          ];
+          await _persistOrders();
+          setDriverNotice(tr('Yo‘lovchi safarni bekor qildi.'));
+        }
       }
     } catch (_) {
       // Internet yo'q yoki server javob bermadi — mahalliy ro'yxat o'zgarishsiz qoladi.
@@ -738,31 +770,26 @@ class DriverTripService extends ChangeNotifier {
         final order = _prebookOrderFromServerRow(row);
         if (order == null) continue;
         seenIds.add(order.id);
-        _missedPrebookPolls.remove(order.id);
         await addPassengerOrder(order);
       }
-      final stale = orders.where((o) =>
-          o.kind == PassengerOrderKind.prebook &&
-          _isForMe(o) &&
-          (o.status == PassengerOrderStatus.open ||
-              o.status == PassengerOrderStatus.counterOffered ||
-              o.status == PassengerOrderStatus.accepted) &&
-          !seenIds.contains(o.id));
-      // Ikki marta KETMA-KET poll'dan tushib qolmaguncha bekor qilmaymiz —
-      // bitta vaqtinchalik bo'sh javob (server tarmoq sekinligi yoki
-      // haydovchining onlayn holati bir lahza noto'g'ri ko'rinishi) butun
-      // tasdiqlangan safarni noto'g'ri "yo'lovchi boshqasini tanladi" deb
-      // bekor qilib yubormasligi uchun.
-      final staleIds = <String>[];
-      for (final o in stale) {
-        final misses = (_missedPrebookPolls[o.id] ?? 0) + 1;
-        if (misses >= 2) {
-          staleIds.add(o.id);
-          _missedPrebookPolls.remove(o.id);
-        } else {
-          _missedPrebookPolls[o.id] = misses;
-        }
-      }
+      // `/requests/inbox` endi haydovchi vaqtincha oflayn ko'ringanda ham
+      // ACCEPTED/SELECTED/CONFIRMED qatorlarini ko'rsatadi (backend tuzatildi
+      // — faqat yangi PENDING ishlar oflaynda yashiriladi), shuning uchun
+      // haqiqiy "yo'lovchi bekor qildi/boshqa haydovchini tanladi" holati
+      // bitta pollda ham ishonchli aniqlanadi — kechiktirish shart emas
+      // (avval shart edi, chunki eski backend bir lahzalik oflayn
+      // holatida ham BARCHASINI bo'sh qaytarib, haqiqiy bekor qilishni
+      // soxta bekor qilishdan ajrata olmasdi).
+      final staleIds = orders
+          .where((o) =>
+              o.kind == PassengerOrderKind.prebook &&
+              _isForMe(o) &&
+              (o.status == PassengerOrderStatus.open ||
+                  o.status == PassengerOrderStatus.counterOffered ||
+                  o.status == PassengerOrderStatus.accepted) &&
+              !seenIds.contains(o.id))
+          .map((o) => o.id)
+          .toList();
       if (staleIds.isNotEmpty) {
         orders = [
           for (final o in orders)
@@ -866,6 +893,7 @@ class DriverTripService extends ChangeNotifier {
       kind: PassengerOrderKind.instant,
       from: trip['from_text'] as String? ?? '',
       to: trip['to_text'] as String? ?? '',
+      exactPickup: row['exact_pickup'] as String? ?? '',
       passengers: row['seats'] as int? ?? 1,
       createdAt: DateTime.tryParse(row['created_at'] as String? ?? '') ?? DateTime.now(),
       offeredPrice: trip['price'] as int? ?? 0,

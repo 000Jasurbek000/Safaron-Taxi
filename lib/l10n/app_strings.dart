@@ -159,6 +159,10 @@ class AppStrings {
     'phone_change_hint':
         'Raqamni o‘zgartirish SMS tasdiqlash bilan keyingi yangilanishda qo‘shiladi.',
 
+    'hide_phone_title': 'Raqamimni yashirish',
+    'hide_phone_hint':
+        'Yoqilsa, haydovchilarga telefon raqamingiz «+998***» shaklida ko‘rinadi, qo‘ng‘iroq tugmasi o‘chadi — faqat ilova ichida yozishishingiz mumkin bo‘ladi.',
+
     'faq_title': 'Tez-tez so‘raladigan savollar',
     'help_title': 'Yordam',
     'about_title': 'Ilova haqida',
@@ -410,6 +414,10 @@ class AppStrings {
     'phone_number': 'Телефон рақами',
     'phone_change_hint':
         'Рақамни ўзгартириш SMS тасдиқлаш билан кейинги янгиланишда қўшилади.',
+
+    'hide_phone_title': 'Рақамимни яшириш',
+    'hide_phone_hint':
+        'Ёқилса, ҳайдовчиларга телефон рақамингиз «+998***» шаклида кўринади, қўнғироқ тугмаси ўчади — фақат илова ичида ёзишишингиз мумкин бўлади.',
 
     'faq_title': 'Тез-тез сўраладиган саволлар',
     'help_title': 'Ёрдам',
@@ -687,6 +695,10 @@ class AppStrings {
     'phone_change_hint':
         'Смена номера с SMS-подтверждением будет добавлена в следующем обновлении.',
 
+    'hide_phone_title': 'Скрыть мой номер',
+    'hide_phone_hint':
+        'Если включено, водители увидят ваш номер в виде «+998***», кнопка звонка станет недоступна — переписка возможна только в приложении.',
+
     'faq_title': 'Частые вопросы',
     'help_title': 'Помощь',
     'about_title': 'О приложении',
@@ -958,6 +970,10 @@ class AppStrings {
     'phone_number': 'Телефон нөмірі',
     'phone_change_hint':
         'Нөмірді SMS арқылы растау мүмкіндігі келесі жаңартуда қосылады.',
+
+    'hide_phone_title': 'Нөмірімді жасыру',
+    'hide_phone_hint':
+        'Қосылса, жүргізушілерге телефон нөміріңіз «+998***» түрінде көрінеді, қоңырау түймесі өшеді — тек қолданба ішінде жазысуға болады.',
 
     'faq_title': 'Жиі қойылатын сұрақтар',
     'help_title': 'Көмек',

@@ -73,6 +73,7 @@ class _WaitingDriverScreenState extends State<WaitingDriverScreen>
             : '${widget.taxi.from} · ${widget.exactPickup.trim()}',
         force: widget.forceInstant,
         note: widget.note,
+        exactPickup: widget.exactPickup.trim().isEmpty ? null : widget.exactPickup.trim(),
       );
       if (err != null && mounted) {
         if (err.contains('faol bron')) {
@@ -90,6 +91,7 @@ class _WaitingDriverScreenState extends State<WaitingDriverScreen>
                 : '${widget.taxi.from} · ${widget.exactPickup.trim()}',
             force: true,
             note: widget.note,
+            exactPickup: widget.exactPickup.trim().isEmpty ? null : widget.exactPickup.trim(),
           );
           if (retry != null && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

@@ -66,6 +66,58 @@ class _DriverOnWayScreenState extends State<DriverOnWayScreen> {
     return ActiveBookingService.instance.instantBooking;
   }
 
+  Future<void> _increaseSeats(ActiveBooking booking, int maxExtra) async {
+    var picked = booking.seats + 1;
+    final maxSeats = booking.seats + maxExtra;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: Text(tr('Yo‘lovchilar sonini oshirish'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                tr('Diqqat: sonini faqat oshirishingiz mumkin — keyin orqaga kamaytirib bo‘lmaydi.'),
+                style: GoogleFonts.montserrat(fontSize: 13, color: AppColors.destination, fontWeight: FontWeight.w700, height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    onPressed: picked <= booking.seats + 1 ? null : () => setDialogState(() => picked--),
+                    icon: const Icon(Icons.remove_circle_outline),
+                  ),
+                  Text('$picked', style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 22)),
+                  IconButton(
+                    onPressed: picked >= maxSeats ? null : () => setDialogState(() => picked++),
+                    icon: const Icon(Icons.add_circle, color: AppColors.primary),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr('Bekor qilish'))),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(tr('Tasdiqlash'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, color: AppColors.primary)),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final err = await ActiveBookingService.instance.increaseSeats(bookingId: booking.id, newSeats: picked);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(err ?? tr('Yo‘lovchilar soni yangilandi.')), behavior: SnackBarBehavior.floating),
+    );
+  }
+
   Future<void> _cancel() async {
     final reason = await showCancelReasonSheet(context);
     if (reason == null || !mounted) return;
@@ -254,7 +306,30 @@ class _DriverOnWayScreenState extends State<DriverOnWayScreen> {
                           children: [
                             _Detail(Icons.route_rounded, routeText),
                             if (etaLine != null) _Detail(Icons.timer_outlined, etaLine, highlight: true),
-                            _Detail(Icons.event_seat_outlined, '${widget.seats} ta joy'),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.event_seat_outlined, size: 16, color: AppColors.primary),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      '${booking?.seats ?? widget.seats} ta joy',
+                                      style: GoogleFonts.montserrat(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.navy),
+                                    ),
+                                  ),
+                                  if (!pickedUp && taxi.seats > 0 && booking != null)
+                                    InkWell(
+                                      borderRadius: BorderRadius.circular(20),
+                                      onTap: () => _increaseSeats(booking, taxi.seats),
+                                      child: const Padding(
+                                        padding: EdgeInsets.all(4),
+                                        child: Icon(Icons.add_circle, color: AppColors.primary, size: 22),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
                             _Detail(Icons.payments_outlined, taxi.priceLabel),
                           ],
                         ),

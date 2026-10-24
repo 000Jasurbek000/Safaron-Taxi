@@ -442,7 +442,7 @@ class _OrderCard extends StatelessWidget {
                 width: double.infinity,
                 height: 40,
                 child: TextButton.icon(
-                  onPressed: _call,
+                  onPressed: order.passengerPhoneHidden ? null : _call,
                   icon: Icon(Icons.phone_rounded, size: 18, color: accent),
                   label: Text(tr('Aloqa'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, color: accent)),
                 ),
@@ -455,7 +455,7 @@ class _OrderCard extends StatelessWidget {
                   child: SizedBox(
                     height: 44,
                     child: OutlinedButton.icon(
-                      onPressed: _call,
+                      onPressed: order.passengerPhoneHidden ? null : _call,
                       icon: const Icon(Icons.phone_rounded, size: 18),
                       label: Text(tr('Qo‘ng‘iroq'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
                     ),

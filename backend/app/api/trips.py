@@ -11,6 +11,7 @@ from app.schemas import (
     BookTripIn,
     CancelIn,
     DriverRespondIn,
+    IncreaseSeatsIn,
     OkResponse,
     StatusUpdateIn,
     TripBookingOut,
@@ -212,6 +213,26 @@ def book_trip(trip_id: int, body: BookTripIn, user: User = Depends(get_current_u
             raise HTTPException(400, "Siz bu safarga allaqachon so‘rov yubordingiz — javobni kuting.")
         raise HTTPException(400, "Siz allaqachon shu safarga joy band qilgansiz.")
 
+    # Yuqoridagi tekshiruv faqat AYNAN shu trip_id uchun — agar haydovchi
+    # xuddi shu yo'nalishni BOSHQA (masalan qayta e'lon qilingan) safar
+    # sifatida joylagan bo'lsa, passenger yana bir faol so'rov yuborib,
+    # bitta haydovchiga bir vaqtning o'zida bir xil manzilga ikkita
+    # parallel so'rov ochib qo'yishi mumkin edi. Shuni ham yopamiz.
+    same_route_active = (
+        db.query(TripBooking)
+        .join(Trip, Trip.id == TripBooking.trip_id)
+        .filter(
+            Trip.driver_id == trip.driver_id,
+            Trip.from_text == trip.from_text,
+            Trip.to_text == trip.to_text,
+            TripBooking.passenger_id == user.id,
+            TripBooking.status.in_(["PENDING", "COUNTERED", "CONFIRMED", "DRIVER_ON_WAY", "PASSENGER_PICKED"]),
+        )
+        .first()
+    )
+    if same_route_active:
+        raise HTTPException(400, "Siz shu haydovchiga shu yo‘nalishga allaqachon faol so‘rov yuborgansiz.")
+
     settings = get_settings()
     booking = TripBooking(
         trip_id=trip.id,
@@ -219,6 +240,8 @@ def book_trip(trip_id: int, body: BookTripIn, user: User = Depends(get_current_u
         seats=body.seats,
         status="PENDING",
         expires_at=datetime.utcnow() + timedelta(seconds=settings.instant_booking_timeout_sec),
+        exact_pickup=(body.exact_pickup or "").strip() or None,
+        note=(body.note or "").strip() or None,
     )
     db.add(booking)
     db.flush()
@@ -424,6 +447,49 @@ def confirm_counter(booking_id: int, user: User = Depends(get_current_user), db:
             related_id=booking.id,
         )
     db.commit()
+    return booking_out(db, booking)
+
+
+@router.post("/bookings/{booking_id}/increase-seats", response_model=TripBookingOut)
+def increase_seats(booking_id: int, body: IncreaseSeatsIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Yo'lovchi allaqachon tasdiqlangan band qilishdagi o'rindiq sonini
+    OSHIRISHI mumkin (hech qachon kamaytira olmaydi) — haydovchida bo'sh
+    joy qolgan bo'lsa. Narx 1 o'rindiq narxi * o'rindiq soni sifatida
+    HAR DOIM hisoblanadi (agreed_price o'zgarmaydi, faqat `seats`), shuning
+    uchun jami narx avtomatik ko'payadi. Haydovchi buni keyingi poll'da
+    yangilangan `seats`/jami narx orqali ko'radi — jismoniy sig'imga qarab
+    hammasini olish yoki yo'qligini o'zi hal qiladi."""
+    booking = db.get(TripBooking, booking_id)
+    if not booking or booking.passenger_id != user.id:
+        raise HTTPException(403, "Bu amalni bajarish huquqingiz yo‘q.")
+    if booking.status not in ("CONFIRMED", "DRIVER_ON_WAY"):
+        raise HTTPException(400, "Faqat tasdiqlangan safarda o'rindiq sonini oshirish mumkin.")
+    if body.new_seats <= booking.seats:
+        raise HTTPException(400, "Yangi son joriy o'rindiq sonidan ko'p bo'lishi shart — kamaytirib bo'lmaydi.")
+    trip = db.query(Trip).filter(Trip.id == booking.trip_id).first()
+    if not trip:
+        raise HTTPException(404, "Safar topilmadi.")
+    extra = body.new_seats - booking.seats
+    if trip.seats_available < extra:
+        raise HTTPException(400, "Haydovchida yetarli bo'sh joy yo'q.")
+    trip.seats_available -= extra
+    booking.seats = body.new_seats
+    if trip.seats_available == 0:
+        assert_transition(TRIP_TRANSITIONS, trip.status, "FULL")
+        trip.status = "FULL"
+    driver = db.get(DriverProfile, trip.driver_id)
+    if driver:
+        notify(
+            db,
+            user_id=driver.user_id,
+            title="Yo‘lovchilar soni oshdi",
+            body=f"{trip.from_text} → {trip.to_text}: endi {body.new_seats} kishi.",
+            type="seats_increased",
+            related_type="trip_booking",
+            related_id=booking.id,
+        )
+    db.commit()
+    db.refresh(booking)
     return booking_out(db, booking)
 
 

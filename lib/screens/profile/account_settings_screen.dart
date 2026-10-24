@@ -23,6 +23,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   late final TextEditingController _last;
   late int _experience;
   bool _saving = false;
+  bool _hidePhone = false;
+  bool _savingHidePhone = false;
 
   @override
   void initState() {
@@ -30,6 +32,26 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     _first = TextEditingController(text: _profile.firstName);
     _last = TextEditingController(text: _profile.lastName);
     _experience = _profile.experienceYears;
+    _hidePhone = AuthService.instance.user?.hidePhone ?? false;
+  }
+
+  Future<void> _toggleHidePhone(bool value) async {
+    setState(() {
+      _hidePhone = value;
+      _savingHidePhone = true;
+    });
+    try {
+      await AuthService.instance.setHidePhone(value);
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() => _hidePhone = !value);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), behavior: SnackBarBehavior.floating),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingHidePhone = false);
+    }
   }
 
   @override
@@ -135,6 +157,37 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                       ],
                     ),
                   ),
+                  if (!_profile.isApprovedDriver) ...[
+                    const SizedBox(height: 12),
+                    SoftCard(
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  AppStrings.t('hide_phone_title'),
+                                  style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 15),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  AppStrings.t('hide_phone_hint'),
+                                  style: GoogleFonts.montserrat(fontSize: 12, color: AppColors.textMuted, height: 1.35),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Switch(
+                            value: _hidePhone,
+                            activeThumbColor: AppColors.primary,
+                            onChanged: _savingHidePhone ? null : _toggleHidePhone,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   SoftCard(
                     child: Column(

@@ -97,6 +97,7 @@ class UserOut(UTCModel):
     car_seats: Optional[int] = None
     car_photo: Optional[str] = None
     car_color: Optional[str] = None
+    hide_phone: bool = False
 
     class Config:
         from_attributes = True
@@ -114,6 +115,7 @@ class ProfileUpdateIn(UTCModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     experience_years: Optional[int] = Field(default=None, ge=0, le=60)
+    hide_phone: Optional[bool] = None
 
 
 class ChangePhoneIn(UTCModel):
@@ -188,6 +190,11 @@ class TripOut(UTCModel):
 class BookTripIn(UTCModel):
     seats: int = Field(default=1, ge=1, le=15)
     note: Optional[str] = None
+    exact_pickup: Optional[str] = None
+
+
+class IncreaseSeatsIn(UTCModel):
+    new_seats: int = Field(ge=1, le=15)
 
 
 class TripBookingOut(UTCModel):
@@ -200,6 +207,8 @@ class TripBookingOut(UTCModel):
     eta_minutes: Optional[int] = None
     eta_arrive_at: Optional[datetime] = None
     picked_up_at: Optional[datetime] = None
+    exact_pickup: Optional[str] = None
+    note: Optional[str] = None
     cancelled_by: Optional[str] = None
     cancel_reason: Optional[str] = None
     cancelled_at: Optional[datetime] = None

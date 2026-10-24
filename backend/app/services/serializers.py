@@ -7,6 +7,17 @@ from app.schemas import DriverResponseOut, RequestOut, TripBookingOut, TripOut, 
 from app.services.phone import format_phone_display
 
 
+def passenger_phone_for_driver(passenger: User | None) -> str:
+    """Yo'lovchi `hide_phone`ni yoqqan bo'lsa, haydovchiga ko'rinadigan
+    raqamni "+998***" shakliga qisqartiradi — asl raqam hech qanday
+    band qilish/so'rov javobida to'liq chiqmaydi."""
+    if not passenger:
+        return ""
+    if passenger.hide_phone:
+        return "+998***"
+    return passenger.phone or ""
+
+
 def compute_avg_response_secs(db: Session, driver_ids: list[int]) -> dict[int, int]:
     """Har bir haydovchi o‘tgan so‘rovlarga qancha tez javob berganini (soniyada)
     hisoblaydi — qidiruv natijalarida tezroq javob beradiganlarni yuqoriga chiqarish uchun."""
@@ -55,6 +66,7 @@ def user_out(user: User) -> UserOut:
         car_seats=vehicle.seats if vehicle else None,
         car_photo=vehicle.photo_path if vehicle else None,
         car_color=vehicle.color if vehicle else None,
+        hide_phone=user.hide_phone,
     )
 
 
@@ -117,6 +129,8 @@ def booking_out(db: Session, booking: TripBooking) -> TripBookingOut:
         eta_minutes=booking.eta_minutes,
         eta_arrive_at=booking.eta_arrive_at,
         picked_up_at=booking.picked_up_at,
+        exact_pickup=booking.exact_pickup,
+        note=booking.note,
         cancelled_by=booking.cancelled_by,
         cancel_reason=booking.cancel_reason,
         cancelled_at=booking.cancelled_at,
@@ -125,7 +139,7 @@ def booking_out(db: Session, booking: TripBooking) -> TripBookingOut:
         expires_at=booking.expires_at,
         trip=trip_out_for(db, booking.trip),
         passenger_name=passenger.full_name if passenger else "",
-        passenger_phone=passenger.phone if passenger else "",
+        passenger_phone=passenger_phone_for_driver(passenger),
         passenger_rating=passenger.rating_avg if passenger else 5.0,
         passenger_photo=passenger.avatar_path if passenger else None,
     )
@@ -155,6 +169,7 @@ def request_out(
     req: TripRequest,
     responses: list[DriverResponseOut] | None = None,
     passenger: User | None = None,
+    viewed_by_driver: bool = False,
 ) -> RequestOut:
     return RequestOut(
         id=req.id,
@@ -174,7 +189,7 @@ def request_out(
         created_at=req.created_at,
         expires_at=req.expires_at,
         passenger_name=passenger.full_name if passenger else "",
-        passenger_phone=passenger.phone if passenger else "",
+        passenger_phone=passenger_phone_for_driver(passenger) if viewed_by_driver else (passenger.phone if passenger else ""),
         passenger_photo=passenger.avatar_path if passenger else None,
     )
 

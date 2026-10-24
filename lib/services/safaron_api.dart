@@ -107,10 +107,11 @@ class TripApi {
     return data as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> book(int tripId, {int seats = 1, String? note}) async {
+  Future<Map<String, dynamic>> book(int tripId, {int seats = 1, String? note, String? exactPickup}) async {
     final data = await ApiClient.instance.post('/api/trips/$tripId/book', body: {
       'seats': seats,
       if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      if (exactPickup != null && exactPickup.trim().isNotEmpty) 'exact_pickup': exactPickup.trim(),
     });
     return data as Map<String, dynamic>;
   }
@@ -169,6 +170,11 @@ class TripApi {
 
   Future<void> cancelBooking(int bookingId, String reason) async {
     await ApiClient.instance.post('/api/trips/bookings/$bookingId/cancel', body: {'reason': reason});
+  }
+
+  Future<Map<String, dynamic>> increaseSeats(int bookingId, int newSeats) async {
+    final data = await ApiClient.instance.post('/api/trips/bookings/$bookingId/increase-seats', body: {'new_seats': newSeats});
+    return data as Map<String, dynamic>;
   }
 }
 

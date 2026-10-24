@@ -577,6 +577,7 @@ class ActiveBookingService extends ChangeNotifier {
     String? pickupLabel,
     bool force = false,
     String? note,
+    String? exactPickup,
   }) async {
     if (!force && hasSameRoute(taxi.from, taxi.to)) {
       return 'Bu yo‘nalishda allaqachon faol bron bor';
@@ -587,7 +588,7 @@ class ActiveBookingService extends ChangeNotifier {
     // ko'radi va keyinroq holatini pollab turamiz — boshqa qurilmada ham).
     if (taxi.remoteTripId != null) {
       try {
-        final created = await TripApi.instance.book(taxi.remoteTripId!, seats: seats, note: note);
+        final created = await TripApi.instance.book(taxi.remoteTripId!, seats: seats, note: note, exactPickup: exactPickup);
         id = 'inst_${created['id']}';
       } on ApiException catch (e) {
         return e.message;
@@ -715,6 +716,33 @@ class ActiveBookingService extends ChangeNotifier {
     await _persist();
     ChatService.instance.ensureThread(taxi);
     notifyListeners();
+  }
+
+  /// Yo'lovchi tasdiqlangan band qilishdagi o'rindiq sonini OSHIRADI —
+  /// hech qachon kamaytirmaydi (UI bu cheklovni oldindan ko'rsatishi
+  /// kerak). Natija: muvaffaqiyatda `null`, xato bo'lsa xabar matni.
+  Future<String?> increaseSeats({required String bookingId, required int newSeats}) async {
+    final remoteId = _parseRemoteBookingId(bookingId);
+    if (remoteId == null) return tr('Bu band qilish uchun mavjud emas.');
+    final Map<String, dynamic> row;
+    try {
+      row = await TripApi.instance.increaseSeats(remoteId, newSeats);
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return tr('Internet aloqasi yo‘q yoki server javob bermadi. Qayta urinib ko‘ring.');
+    }
+    final trip = row['trip'] as Map<String, dynamic>;
+    final seats = row['seats'] as int? ?? newSeats;
+    final unitPrice = (row['agreed_price'] as int?) ?? (trip['price'] as int? ?? 0);
+    final updatedTaxi = TripCatalogService.fromApi(trip).copyWith(price: unitPrice * seats);
+    bookings = [
+      for (final b in bookings)
+        if (b.id == bookingId) b.copyWith(seats: seats, taxi: updatedTaxi) else b,
+    ];
+    await _persist();
+    notifyListeners();
+    return null;
   }
 
   Future<void> setDriverAccepted({

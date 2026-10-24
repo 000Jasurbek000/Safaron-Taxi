@@ -27,7 +27,7 @@ def _build_request_out(db: Session, req: TripRequest, viewer_driver_id: int | No
             continue
         responses.append(response_out(resp, driver, driver.vehicle, driver.user, req.offered_price))
     passenger = db.get(User, req.passenger_id)
-    return request_out(req, responses, passenger)
+    return request_out(req, responses, passenger, viewed_by_driver=viewer_driver_id is not None)
 
 
 def _expire_if_needed(db: Session, req: TripRequest) -> None:
@@ -50,6 +50,25 @@ def create_request(body: RequestCreateIn, user: User = Depends(get_current_user)
     scheduled = parse_dt(body.scheduled_at)
     if scheduled < datetime.utcnow() - timedelta(minutes=1):
         raise HTTPException(400, "Vaqt o‘tib ketgan.")
+
+    # Passenger bir vaqtning o'zida bir xil yo'nalishga ikkita parallel
+    # faol so'rov ocha olmasin (masalan tasodifan ikki marta bosilsa, yoki
+    # ataylab bir nechta so'rov bilan "spam" qilsa).
+    same_route_active = (
+        db.query(TripRequest)
+        .filter(
+            TripRequest.passenger_id == user.id,
+            TripRequest.from_text == from_text,
+            TripRequest.to_text == to_text,
+            TripRequest.status.in_(
+                ["SEARCHING", "DRIVER_ACCEPTED", "PASSENGER_SELECTED", "CONFIRMED", "DRIVER_ON_WAY", "PASSENGER_PICKED", "IN_PROGRESS"]
+            ),
+        )
+        .first()
+    )
+    if same_route_active:
+        raise HTTPException(400, "Siz shu yo‘nalishga allaqachon faol so‘rov yuborgansiz.")
+
     settings = get_settings()
     req = TripRequest(
         passenger_id=user.id,
