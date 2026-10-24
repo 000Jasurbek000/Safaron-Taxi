@@ -35,7 +35,7 @@ def ensure_columns() -> None:
             ("telegram_username", "VARCHAR(64)"),
             ("verified_trip_count", "INTEGER DEFAULT 0"),
             ("deleted_at", "TIMESTAMP"),
-            ("hide_phone", "BOOLEAN DEFAULT 0"),
+            ("hide_phone", "BOOLEAN DEFAULT FALSE"),
         ],
         "admin_logs": [("ip", "VARCHAR(64)")],
         "locations": [("radius_m", "FLOAT")],
