@@ -928,7 +928,15 @@
         <button class="btn" id="cancelEditBtn" style="display:none">Bekor qilish</button>
       </div>
       <div id="locMap" style="height:280px;border-radius:10px;margin-top:12px;overflow:hidden"></div>
-      `)) + u.card('Joylar ro‘yxati', u.table([
+      `)) + u.card('Joylar ro‘yxati', `
+        <div class="page-toolbar" style="margin:0 0 10px">
+          <label style="display:flex;align-items:center;gap:6px;font-weight:600;cursor:pointer">
+            <input type="checkbox" id="locSelectAll"> Barchasini tanlash
+          </label>
+          <button class="btn sm danger" id="locBulkDeleteBtn" disabled>🗑 Tanlanganlarni o‘chirish (<span id="locSelCount">0</span>)</button>
+        </div>
+      ` + u.table([
+        { label: '', key: 'sel', render: (r) => `<input type="checkbox" class="loc-chk" data-id="${r.id}">` },
         { label: 'ID', key: 'id', render: (r) => `#${r.id}` },
         { label: 'Nomi', key: 'name' },
         { label: 'Turi', key: 'type' },
@@ -1077,11 +1085,44 @@
         const id = b.getAttribute('data-del');
         const row = rows.find((r) => String(r.id) === String(id));
         if (!confirm(`“${row ? row.name : '#' + id}” joyini butunlay o‘chirasizmi? Bu amalni qaytarib bo‘lmaydi.`)) return;
-        await api()(`/admin/locations/${id}`, { method: 'DELETE' });
-        if (editingId === Number(id)) resetForm();
-        navigate('locations');
+        try {
+          await api()(`/admin/locations/${id}`, { method: 'DELETE' });
+          if (editingId === Number(id)) resetForm();
+          navigate('locations');
+        } catch (e) {
+          alert(e.message || 'Joyni o‘chirishda xatolik yuz berdi.');
+        }
       };
     });
+
+    // --- Tanlab bir nechtasini birdaniga o'chirish ---
+    const selectAllEl = document.getElementById('locSelectAll');
+    const bulkDeleteBtn = document.getElementById('locBulkDeleteBtn');
+    const selCountEl = document.getElementById('locSelCount');
+    const getChecks = () => Array.from(content.querySelectorAll('.loc-chk'));
+    function updateBulkState() {
+      const checked = getChecks().filter((c) => c.checked);
+      selCountEl.textContent = checked.length;
+      bulkDeleteBtn.disabled = checked.length === 0;
+      selectAllEl.checked = checked.length > 0 && checked.length === getChecks().length;
+    }
+    getChecks().forEach((c) => { c.onchange = updateBulkState; });
+    selectAllEl.onchange = () => {
+      getChecks().forEach((c) => { c.checked = selectAllEl.checked; });
+      updateBulkState();
+    };
+    bulkDeleteBtn.onclick = async () => {
+      const ids = getChecks().filter((c) => c.checked).map((c) => Number(c.getAttribute('data-id')));
+      if (!ids.length) return;
+      if (!confirm(`${ids.length} ta joyni butunlay o‘chirasizmi? Bu amalni qaytarib bo‘lmaydi.`)) return;
+      try {
+        await api()('/admin/locations/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) });
+        navigate('locations');
+      } catch (e) {
+        alert(e.message || 'Joylarni o‘chirishda xatolik yuz berdi.');
+      }
+    };
+    updateBulkState();
   }
 
   function renderNotify() {

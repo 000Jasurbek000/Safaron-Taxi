@@ -148,6 +148,10 @@ class LocationCreateIn(UTCModel):
     aliases: list[str] = []
 
 
+class LocationBulkDeleteIn(BaseModel):
+    ids: list[int]
+
+
 class TripCreateIn(UTCModel):
     from_location_id: Optional[int] = None
     to_location_id: Optional[int] = None

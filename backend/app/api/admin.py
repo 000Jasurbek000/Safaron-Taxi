@@ -17,6 +17,7 @@ from app.models import (
     DriverDocument,
     DriverProfile,
     ErrorLog,
+    FavoritePlace,
     FraudEvent,
     Location,
     LocationAlias,
@@ -38,6 +39,7 @@ from app.schemas import (
     AdminPasswordChangeIn,
     AdminProfileUpdateIn,
     AdminTokenOut,
+    LocationBulkDeleteIn,
     LocationCreateIn,
     NotifyBroadcastIn,
     OkResponse,
@@ -853,16 +855,47 @@ def reject_location(location_id: int, admin: AdminUser = Depends(get_current_adm
     return OkResponse(ok=True)
 
 
+def _detach_location_refs(db: Session, location_id: int) -> None:
+    """O'chirishdan oldin bu joyga ishora qiluvchi yozuvlarni ajratib
+    oladi — Trip/TripRequest o'z `from_text`/`to_text`ini mustaqil
+    saqlaydi, shuning uchun FK'ni NULL qilish tarixiy safar/so'rov
+    matnini buzmaydi. Shu tekshiruv bo'lmasa, FK cheklovi tufayli
+    o'chirish `IntegrityError` bilan yiqilib, admin panelida umumiy
+    "server xatosi" ko'rinib, joy hech qachon o'chmagandek tuyulardi."""
+    db.query(Trip).filter(Trip.from_location_id == location_id).update({"from_location_id": None})
+    db.query(Trip).filter(Trip.to_location_id == location_id).update({"to_location_id": None})
+    db.query(TripRequest).filter(TripRequest.from_location_id == location_id).update({"from_location_id": None})
+    db.query(TripRequest).filter(TripRequest.to_location_id == location_id).update({"to_location_id": None})
+    db.query(FavoritePlace).filter(FavoritePlace.location_id == location_id).update({"location_id": None})
+
+
 @router.delete("/locations/{location_id}", response_model=OkResponse)
 def delete_location(location_id: int, admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
     loc = db.get(Location, location_id)
     if not loc:
         raise HTTPException(404, "Joy topilmadi.")
     name = loc.name
+    _detach_location_refs(db, location_id)
     _log(db, admin, "location_delete", "location", location_id, None, {"name": name})
     db.delete(loc)
     db.commit()
     return OkResponse(ok=True, message="Joy o‘chirildi.")
+
+
+@router.post("/locations/bulk-delete", response_model=OkResponse)
+def bulk_delete_locations(body: LocationBulkDeleteIn, admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)):
+    deleted = 0
+    for location_id in body.ids:
+        loc = db.get(Location, location_id)
+        if not loc:
+            continue
+        name = loc.name
+        _detach_location_refs(db, location_id)
+        _log(db, admin, "location_delete", "location", location_id, None, {"name": name})
+        db.delete(loc)
+        deleted += 1
+    db.commit()
+    return OkResponse(ok=True, message=f"{deleted} ta joy o‘chirildi.")
 
 
 @router.get("/trips")
