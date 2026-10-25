@@ -50,6 +50,7 @@ class ActiveBooking {
     this.offeredPrice,
     this.counterPrice,
     this.statusMessage,
+    this.pendingSeats,
   });
 
   final String id;
@@ -67,6 +68,11 @@ class ActiveBooking {
   final int? offeredPrice;
   final int? counterPrice;
   final String? statusMessage;
+
+  /// Yo'lovchi so'ragan, hali haydovchi javob bermagan yangi o'rindiq soni
+  /// (null — kutilayotgan so'rov yo'q). Faqat haydovchi tasdiqlagandan
+  /// keyin `seats`ning o'ziga ko'chadi.
+  final int? pendingSeats;
 
   String get routeLabel => '$from → $to';
 
@@ -118,6 +124,8 @@ class ActiveBooking {
     String? statusMessage,
     bool clearEta = false,
     bool clearCounter = false,
+    int? pendingSeats,
+    bool clearPendingSeats = false,
   }) {
     return ActiveBooking(
       id: id,
@@ -135,6 +143,7 @@ class ActiveBooking {
       offeredPrice: clearCounter ? null : (offeredPrice ?? this.offeredPrice),
       counterPrice: clearCounter ? null : (counterPrice ?? this.counterPrice),
       statusMessage: statusMessage ?? this.statusMessage,
+      pendingSeats: clearPendingSeats ? null : (pendingSeats ?? this.pendingSeats),
     );
   }
 
@@ -154,6 +163,7 @@ class ActiveBooking {
         if (offeredPrice != null) 'offeredPrice': offeredPrice,
         if (counterPrice != null) 'counterPrice': counterPrice,
         if (statusMessage != null) 'statusMessage': statusMessage,
+        if (pendingSeats != null) 'pendingSeats': pendingSeats,
       };
 
   static ActiveBooking fromJson(Map<String, dynamic> json) {
@@ -177,6 +187,7 @@ class ActiveBooking {
       offeredPrice: json['offeredPrice'] as int?,
       counterPrice: json['counterPrice'] as int?,
       statusMessage: json['statusMessage'] as String?,
+      pendingSeats: json['pendingSeats'] as int?,
     );
   }
 
@@ -509,6 +520,30 @@ class ActiveBookingService extends ChangeNotifier {
     final unitPrice = agreedPrice ?? trip['price'] as int;
     final taxi = TripCatalogService.fromApi(trip).copyWith(price: unitPrice * seats);
 
+    // O'rindiq sonini oshirish so'rovi — status o'zgarmaydi (hali CONFIRMED/
+    // DRIVER_ON_WAY), shuning uchun pastdagi status-asoslangan switch'dan
+    // mustaqil, har doim tekshiriladi. `pendingSeats` null bo'lib qolishi
+    // (avval mavjud bo'lgan holda) haydovchi javob berganini bildiradi —
+    // `seats` ko'paygan bo'lsa tasdiqlangan, aks holda rad etilgan.
+    final newPendingSeats = row['pending_seats'] as int?;
+    if (b.pendingSeats != newPendingSeats) {
+      final accepted = b.pendingSeats != null && newPendingSeats == null && seats > b.seats;
+      bookings = [
+        for (final x in bookings)
+          if (x.id == b.id)
+            x.copyWith(
+              seats: accepted ? seats : null,
+              taxi: accepted ? taxi : null,
+              pendingSeats: newPendingSeats,
+              clearPendingSeats: newPendingSeats == null,
+            )
+          else
+            x,
+      ];
+      await _persist();
+      notifyListeners();
+    }
+
     switch (status) {
       case 'COUNTERED':
         if (_statusRank(b.status) < 1 && agreedPrice != null) {
@@ -721,6 +756,9 @@ class ActiveBookingService extends ChangeNotifier {
   /// Yo'lovchi tasdiqlangan band qilishdagi o'rindiq sonini OSHIRADI —
   /// hech qachon kamaytirmaydi (UI bu cheklovni oldindan ko'rsatishi
   /// kerak). Natija: muvaffaqiyatda `null`, xato bo'lsa xabar matni.
+  /// Yo'lovchi o'rindiq sonini OSHIRISHNI SO'RAYDI — darhol qo'llanmaydi,
+  /// haydovchi tasdiqlashi/rad etishini kutadi (`_applyServerBookingRow`
+  /// keyingi poll'da natijani aniqlaydi).
   Future<String?> increaseSeats({required String bookingId, required int newSeats}) async {
     final remoteId = _parseRemoteBookingId(bookingId);
     if (remoteId == null) return tr('Bu band qilish uchun mavjud emas.');
@@ -732,13 +770,10 @@ class ActiveBookingService extends ChangeNotifier {
     } catch (_) {
       return tr('Internet aloqasi yo‘q yoki server javob bermadi. Qayta urinib ko‘ring.');
     }
-    final trip = row['trip'] as Map<String, dynamic>;
-    final seats = row['seats'] as int? ?? newSeats;
-    final unitPrice = (row['agreed_price'] as int?) ?? (trip['price'] as int? ?? 0);
-    final updatedTaxi = TripCatalogService.fromApi(trip).copyWith(price: unitPrice * seats);
+    final pending = row['pending_seats'] as int? ?? newSeats;
     bookings = [
       for (final b in bookings)
-        if (b.id == bookingId) b.copyWith(seats: seats, taxi: updatedTaxi) else b,
+        if (b.id == bookingId) b.copyWith(pendingSeats: pending) else b,
     ];
     await _persist();
     notifyListeners();

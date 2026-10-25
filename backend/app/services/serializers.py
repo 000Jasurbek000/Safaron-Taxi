@@ -131,6 +131,7 @@ def booking_out(db: Session, booking: TripBooking) -> TripBookingOut:
         picked_up_at=booking.picked_up_at,
         exact_pickup=booking.exact_pickup,
         note=booking.note,
+        pending_seats=booking.pending_seats,
         cancelled_by=booking.cancelled_by,
         cancel_reason=booking.cancel_reason,
         cancelled_at=booking.cancelled_at,

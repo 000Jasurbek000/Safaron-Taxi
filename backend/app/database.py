@@ -48,6 +48,7 @@ def ensure_columns() -> None:
             ("completed_at", "TIMESTAMP"),
             ("exact_pickup", "VARCHAR(255)"),
             ("note", "TEXT"),
+            ("pending_seats", "INTEGER"),
         ],
         "messages": [
             ("request_id", "INTEGER"),

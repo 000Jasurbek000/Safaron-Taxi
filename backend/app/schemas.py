@@ -197,6 +197,10 @@ class IncreaseSeatsIn(UTCModel):
     new_seats: int = Field(ge=1, le=15)
 
 
+class SeatIncreaseRespondIn(BaseModel):
+    accept: bool
+
+
 class TripBookingOut(UTCModel):
     id: int
     trip_id: int
@@ -209,6 +213,7 @@ class TripBookingOut(UTCModel):
     picked_up_at: Optional[datetime] = None
     exact_pickup: Optional[str] = None
     note: Optional[str] = None
+    pending_seats: Optional[int] = None
     cancelled_by: Optional[str] = None
     cancel_reason: Optional[str] = None
     cancelled_at: Optional[datetime] = None
@@ -335,6 +340,11 @@ class MessageOut(UTCModel):
     created_at: datetime
     request_id: Optional[int] = None
     trip_id: Optional[int] = None
+
+
+class MessageReadIn(BaseModel):
+    trip_id: Optional[int] = None
+    request_id: Optional[int] = None
 
 
 class RatingIn(UTCModel):

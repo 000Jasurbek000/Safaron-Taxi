@@ -41,6 +41,9 @@ class DriverOnWayScreen extends StatefulWidget {
 
 class _DriverOnWayScreenState extends State<DriverOnWayScreen> {
   Timer? _tick;
+  int? _prevPendingSeats;
+  int _prevSeats = 0;
+  bool _pendingSeatsInit = false;
 
   @override
   void initState() {
@@ -51,6 +54,41 @@ class _DriverOnWayScreenState extends State<DriverOnWayScreen> {
         setState(() {});
       }
     });
+  }
+
+  /// Haydovchi o'rindiq oshirish so'roviga javob berganini (boshqa qurilma/
+  /// pollda) aniqlaydi — `pendingSeats` avval mavjud bo'lib, keyin null
+  /// bo'lib qolgani javob kelganini bildiradi; `seats` ko'paygan bo'lsa
+  /// tasdiqlangan, aks holda rad etilgan.
+  void _trackSeatIncreaseOutcome(ActiveBooking? booking) {
+    final curPendingSeats = booking?.pendingSeats;
+    final curSeats = booking?.seats ?? widget.seats;
+    if (!_pendingSeatsInit) {
+      _prevPendingSeats = curPendingSeats;
+      _prevSeats = curSeats;
+      _pendingSeatsInit = true;
+      return;
+    }
+    if (_prevPendingSeats != curPendingSeats) {
+      if (_prevPendingSeats != null && curPendingSeats == null) {
+        final accepted = curSeats > _prevSeats;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                accepted
+                    ? tr('Haydovchi yo‘lovchilar sonini oshirishni tasdiqladi — $curSeats ta joy.')
+                    : tr('Haydovchi yo‘lovchilar sonini oshirishni rad etdi.'),
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        });
+      }
+      _prevPendingSeats = curPendingSeats;
+    }
+    _prevSeats = curSeats;
   }
 
   @override
@@ -114,7 +152,10 @@ class _DriverOnWayScreenState extends State<DriverOnWayScreen> {
     final err = await ActiveBookingService.instance.increaseSeats(bookingId: booking.id, newSeats: picked);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(err ?? tr('Yo‘lovchilar soni yangilandi.')), behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: Text(err ?? tr('So‘rov haydovchiga yuborildi — javobini kutmoqda.')),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -216,6 +257,7 @@ class _DriverOnWayScreenState extends State<DriverOnWayScreen> {
       listenable: ActiveBookingService.instance,
       builder: (context, _) {
         final booking = _booking;
+        _trackSeatIncreaseOutcome(booking);
         final taxi = booking?.taxi ?? widget.taxi;
         final status = booking?.status ?? BookingStatus.onWay;
         final pickedUp = status == BookingStatus.pickedUp;
@@ -314,17 +356,28 @@ class _DriverOnWayScreenState extends State<DriverOnWayScreen> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      '${booking?.seats ?? widget.seats} ta joy',
+                                      booking?.pendingSeats != null
+                                          ? '${booking?.seats ?? widget.seats} ta joy · ${booking!.pendingSeats} taga so‘rov yuborilgan'
+                                          : '${booking?.seats ?? widget.seats} ta joy',
                                       style: GoogleFonts.montserrat(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.navy),
                                     ),
                                   ),
-                                  if (!pickedUp && taxi.seats > 0 && booking != null)
+                                  if (!pickedUp && taxi.seats > 0 && booking != null && booking.pendingSeats == null)
                                     InkWell(
                                       borderRadius: BorderRadius.circular(20),
                                       onTap: () => _increaseSeats(booking, taxi.seats),
                                       child: const Padding(
                                         padding: EdgeInsets.all(4),
                                         child: Icon(Icons.add_circle, color: AppColors.primary, size: 22),
+                                      ),
+                                    ),
+                                  if (!pickedUp && booking != null && booking.pendingSeats != null)
+                                    const Padding(
+                                      padding: EdgeInsets.all(4),
+                                      child: SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
                                       ),
                                     ),
                                 ],

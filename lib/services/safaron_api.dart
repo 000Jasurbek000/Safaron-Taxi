@@ -176,6 +176,11 @@ class TripApi {
     final data = await ApiClient.instance.post('/api/trips/bookings/$bookingId/increase-seats', body: {'new_seats': newSeats});
     return data as Map<String, dynamic>;
   }
+
+  Future<Map<String, dynamic>> respondSeatIncrease(int bookingId, bool accept) async {
+    final data = await ApiClient.instance.post('/api/trips/bookings/$bookingId/respond-seat-increase', body: {'accept': accept});
+    return data as Map<String, dynamic>;
+  }
 }
 
 class DriverApi {
@@ -263,5 +268,12 @@ class MessageApi {
       if (requestId != null) 'request_id': '$requestId',
     });
     return (data as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> markRead({int? tripId, int? requestId}) async {
+    await ApiClient.instance.post('/api/messages/read', body: {
+      if (tripId != null) 'trip_id': tripId,
+      if (requestId != null) 'request_id': requestId,
+    });
   }
 }

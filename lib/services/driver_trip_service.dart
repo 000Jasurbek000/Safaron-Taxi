@@ -54,6 +54,7 @@ class PassengerOrder {
     this.broadcastGroupId,
     this.passengerUserId,
     this.passengerPhoto,
+    this.pendingSeats,
   });
 
   final String id;
@@ -80,6 +81,10 @@ class PassengerOrder {
   final String? broadcastGroupId;
   final int? passengerUserId;
   final String? passengerPhoto;
+
+  /// Yo'lovchi so'ragan, hali javob berilmagan yangi o'rindiq soni
+  /// (null — kutilayotgan so'rov yo'q). Faqat `instant` buyurtmalarda.
+  final int? pendingSeats;
 
   /// Yo'lovchi "raqamimni yashirish"ni yoqqan bo'lsa, server
   /// `passengerPhone`ni "+998***" shaklida yuboradi — qo'ng'iroq tugmasini
@@ -134,6 +139,8 @@ class PassengerOrder {
     bool clearEta = false,
     DateTime? expiresAt,
     String? broadcastGroupId,
+    int? pendingSeats,
+    bool clearPendingSeats = false,
   }) {
     return PassengerOrder(
       id: id,
@@ -159,6 +166,7 @@ class PassengerOrder {
       broadcastGroupId: broadcastGroupId ?? this.broadcastGroupId,
       passengerUserId: passengerUserId,
       passengerPhoto: passengerPhoto,
+      pendingSeats: clearPendingSeats ? null : (pendingSeats ?? this.pendingSeats),
     );
   }
 
@@ -186,6 +194,7 @@ class PassengerOrder {
         if (broadcastGroupId != null) 'broadcastGroupId': broadcastGroupId,
         if (passengerUserId != null) 'passengerUserId': passengerUserId,
         if (passengerPhoto != null) 'passengerPhoto': passengerPhoto,
+        if (pendingSeats != null) 'pendingSeats': pendingSeats,
       };
 
   static PassengerOrder fromJson(Map<String, dynamic> j) {
@@ -221,6 +230,7 @@ class PassengerOrder {
       broadcastGroupId: j['broadcastGroupId'] as String?,
       passengerUserId: j['passengerUserId'] as int?,
       passengerPhoto: j['passengerPhoto'] as String?,
+      pendingSeats: j['pendingSeats'] as int?,
     );
   }
 }
@@ -494,8 +504,12 @@ class DriverTripService extends ChangeNotifier {
       // ignore: unawaited_futures
       DriverApi.instance.setOnline(true).catchError((_) {});
       _syncHeartbeat();
-      _armInboxPoll();
     }
+    // Oflayn bo'lsa ham ishga tushishi kerak — allaqachon qabul qilingan
+    // band qilishlar (tasdiqlangan/yo'lda) backend tomonidan oflaynda ham
+    // ko'rsatiladi, shuning uchun ularning holati (masalan, yo'lovchi bekor
+    // qildi) oflayn haydovchida ham yangilanishi kerak.
+    _armInboxPoll();
     if (ProfileService.instance.isApprovedDriver) {
       // Qayta o'rnatilgan ilova yoki boshqa qurilmada kirilganda ham
       // haydovchining e'lon qilgan safarlari bo'sh ko'rinmasligi uchun.
@@ -691,10 +705,13 @@ class DriverTripService extends ChangeNotifier {
   /// Boshqa qurilmadagi yo'lovchilarning so'rovlarini serverdan tortib,
   /// mahalliy "Kelgan buyurtmalar" ro'yxatiga qo'shadi — aks holda haydovchi
   /// faqat shu qurilmada yaratilgan (mahalliy push) so'rovlarnigina ko'rardi.
+  /// Online/oflayndan qat'i nazar doim ishga tushadi — allaqachon qabul
+  /// qilingan (COUNTERED/CONFIRMED/DRIVER_ON_WAY/PASSENGER_PICKED) band
+  /// qilishlar backend tomonidan oflaynda ham ko'rsatiladi (haydovchining
+  /// faol majburiyati), faqat YANGI (PENDING) so'rovlar oflaynda
+  /// yashiriladi — shu farq `pollInbox()`ning o'zida hisobga olinadi.
   void _armInboxPoll() {
     _inboxPollTimer?.cancel();
-    _inboxPollTimer = null;
-    if (!isOnline) return;
     _inboxPollTimer = Timer.periodic(const Duration(seconds: 7), (_) {
       // ignore: unawaited_futures
       pollInbox();
@@ -715,37 +732,40 @@ class DriverTripService extends ChangeNotifier {
         seenIds.add(order.id);
         await addPassengerOrder(order);
       }
-      // Yo'lovchi hali haydovchi javob bermasdan oldin band qilishni bekor
-      // qilsa (yoki muddati o'tsa), bu band qilish endi `/inbox`da
-      // ko'rinmaydi — shuni mahalliyda ham "bekor qilindi" deb belgilaymiz,
-      // aks holda eski so'rov haydovchi ekranida abadiy osilib qolardi.
-      // Faqat ONLAYN paytda ishlatiladi — oflaynda PENDING qatorlar
-      // backend tomonidan ataylab yashirilgani uchun (yangi ish
-      // ko'rsatilmasligi kerak), "yo'qligi" u yerda hali bekor qilindi
-      // degani emas.
-      if (isOnline) {
-        final staleIds = orders
-            .where((o) =>
-                o.kind == PassengerOrderKind.instant &&
-                _isForMe(o) &&
-                (o.status == PassengerOrderStatus.open ||
-                    o.status == PassengerOrderStatus.counterOffered ||
-                    o.status == PassengerOrderStatus.accepted ||
-                    o.status == PassengerOrderStatus.onWay) &&
-                !seenIds.contains(o.id))
-            .map((o) => o.id)
-            .toList();
-        if (staleIds.isNotEmpty) {
-          orders = [
-            for (final o in orders)
-              if (staleIds.contains(o.id))
-                o.copyWith(status: PassengerOrderStatus.cancelled)
-              else
-                o,
-          ];
-          await _persistOrders();
-          setDriverNotice(tr('Yo‘lovchi safarni bekor qildi.'));
-        }
+      // Yo'lovchi band qilishni bekor qilsa (tasdiqlashdan oldin HAM,
+      // tasdiqlangandan KEYIN ham) yoki muddati o'tsa, bu band qilish endi
+      // `/inbox`da ko'rinmaydi — shuni mahalliyda ham "bekor qilindi" deb
+      // belgilaymiz, aks holda eski so'rov haydovchi ekranida abadiy osilib
+      // qolardi. `open` (PENDING) holati bundan mustasno — u faqat ONLAYN
+      // paytda tekshiriladi, chunki backend PENDING qatorlarni oflaynda
+      // ataylab yashiradi (yangi ish ko'rsatilmasligi kerak), shuning uchun
+      // "yo'qligi" u holatda hali bekor qilindi degani emas. COUNTERED/
+      // CONFIRMED/DRIVER_ON_WAY esa backend tomonidan oflaynda HAM doim
+      // qaytariladi (haydovchining faol majburiyati) — shuning uchun ular
+      // online holatidan qat'i nazar tekshiriladi, aks holda haydovchi
+      // oflaynga o'tganda yo'lovchi bekor qilgan tasdiqlangan safar abadiy
+      // "faol" ko'rinib qolaveradi.
+      final staleIds = orders
+          .where((o) =>
+              o.kind == PassengerOrderKind.instant &&
+              _isForMe(o) &&
+              !seenIds.contains(o.id) &&
+              (o.status == PassengerOrderStatus.counterOffered ||
+                  o.status == PassengerOrderStatus.accepted ||
+                  o.status == PassengerOrderStatus.onWay ||
+                  (o.status == PassengerOrderStatus.open && isOnline)))
+          .map((o) => o.id)
+          .toList();
+      if (staleIds.isNotEmpty) {
+        orders = [
+          for (final o in orders)
+            if (staleIds.contains(o.id))
+              o.copyWith(status: PassengerOrderStatus.cancelled)
+            else
+              o,
+        ];
+        await _persistOrders();
+        setDriverNotice(tr('Yo‘lovchi safarni bekor qildi.'));
       }
     } catch (_) {
       // Internet yo'q yoki server javob bermadi — mahalliy ro'yxat o'zgarishsiz qoladi.
@@ -784,10 +804,10 @@ class DriverTripService extends ChangeNotifier {
           .where((o) =>
               o.kind == PassengerOrderKind.prebook &&
               _isForMe(o) &&
-              (o.status == PassengerOrderStatus.open ||
-                  o.status == PassengerOrderStatus.counterOffered ||
-                  o.status == PassengerOrderStatus.accepted) &&
-              !seenIds.contains(o.id))
+              !seenIds.contains(o.id) &&
+              (o.status == PassengerOrderStatus.counterOffered ||
+                  o.status == PassengerOrderStatus.accepted ||
+                  (o.status == PassengerOrderStatus.open && isOnline)))
           .map((o) => o.id)
           .toList();
       if (staleIds.isNotEmpty) {
@@ -909,6 +929,7 @@ class DriverTripService extends ChangeNotifier {
       expiresAt: expiresAt == null ? null : DateTime.tryParse(expiresAt),
       passengerUserId: row['passenger_id'] as int?,
       passengerPhoto: row['passenger_photo'] as String?,
+      pendingSeats: row['pending_seats'] as int?,
     );
   }
 
@@ -917,6 +938,25 @@ class DriverTripService extends ChangeNotifier {
     await _persistOrders();
     notifyListeners();
     await _maybeAutoAccept(order);
+  }
+
+  /// Yo'lovchining o'rindiq sonini oshirish so'roviga javob — `accept:
+  /// true` bo'lsa haqiqatan amalga oshadi (seats/narx yangilanadi), `false`
+  /// bo'lsa joriy son o'zgarishsiz qoladi. Natija: muvaffaqiyatda `null`,
+  /// xato bo'lsa xabar matni.
+  Future<String?> respondSeatIncrease(String id, bool accept) async {
+    final remoteId = _remoteBookingId(id);
+    if (remoteId == null) return tr('Bu buyurtma uchun mavjud emas.');
+    Map<String, dynamic> row;
+    try {
+      row = await TripApi.instance.respondSeatIncrease(remoteId, accept);
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return tr('Internet aloqasi yo‘q yoki server javob bermadi. Qayta urinib ko‘ring.');
+    }
+    await addPassengerOrder(_orderFromServerRow(row));
+    return null;
   }
 
   /// Haydovchi belgilagan "minimal narx"dan yuqori taklif kelsa, qo‘lda kutmasdan

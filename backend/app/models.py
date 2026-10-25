@@ -226,6 +226,7 @@ class TripBooking(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     exact_pickup: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    pending_seats: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     trip: Mapped[Trip] = relationship(back_populates="bookings")
 

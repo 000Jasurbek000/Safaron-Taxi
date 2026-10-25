@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.deps import get_current_user, get_optional_user
 from app.models import DriverProfile, Message, Notification, Rating, Trip, TripBooking, TripRequest, User
-from app.schemas import ClientErrorIn, MessageIn, MessageOut, NotificationOut, OkResponse, RatingIn
+from app.schemas import ClientErrorIn, MessageIn, MessageOut, MessageReadIn, NotificationOut, OkResponse, RatingIn
 from app.services.error_log import log_error
 
 router = APIRouter(tags=["misc"])
@@ -162,6 +162,22 @@ def list_messages(
         )
         for m in rows
     ]
+
+
+@router.post("/messages/read", response_model=OkResponse)
+def mark_messages_read(
+    body: MessageReadIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    q = db.query(Message).filter(Message.receiver_id == user.id, Message.is_read.is_(False))
+    if body.trip_id:
+        q = q.filter(Message.trip_id == body.trip_id)
+    if body.request_id:
+        q = q.filter(Message.request_id == body.request_id)
+    q.update({"is_read": True})
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/ratings", response_model=OkResponse)

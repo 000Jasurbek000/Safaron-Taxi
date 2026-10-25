@@ -13,6 +13,7 @@ from app.schemas import (
     DriverRespondIn,
     IncreaseSeatsIn,
     OkResponse,
+    SeatIncreaseRespondIn,
     StatusUpdateIn,
     TripBookingOut,
     TripCreateIn,
@@ -453,12 +454,11 @@ def confirm_counter(booking_id: int, user: User = Depends(get_current_user), db:
 @router.post("/bookings/{booking_id}/increase-seats", response_model=TripBookingOut)
 def increase_seats(booking_id: int, body: IncreaseSeatsIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Yo'lovchi allaqachon tasdiqlangan band qilishdagi o'rindiq sonini
-    OSHIRISHI mumkin (hech qachon kamaytira olmaydi) — haydovchida bo'sh
-    joy qolgan bo'lsa. Narx 1 o'rindiq narxi * o'rindiq soni sifatida
-    HAR DOIM hisoblanadi (agreed_price o'zgarmaydi, faqat `seats`), shuning
-    uchun jami narx avtomatik ko'payadi. Haydovchi buni keyingi poll'da
-    yangilangan `seats`/jami narx orqali ko'radi — jismoniy sig'imga qarab
-    hammasini olish yoki yo'qligini o'zi hal qiladi."""
+    OSHIRISHNI SO'RAYDI (hech qachon kamaytira olmaydi). Bu darhol amalga
+    oshmaydi — `pending_seats`ga yoziladi va haydovchiga bildirishnoma
+    boradi; haydovchi buni aniq TASDIQLASHI yoki RAD ETISHI kerak
+    (`respond-seat-increase`). Faqat tasdiqlangandan keyin `seats` va demak
+    jami narx (1 o'rindiq narxi * o'rindiq soni) o'zgaradi."""
     booking = db.get(TripBooking, booking_id)
     if not booking or booking.passenger_id != user.id:
         raise HTTPException(403, "Bu amalni bajarish huquqingiz yo‘q.")
@@ -472,19 +472,71 @@ def increase_seats(booking_id: int, body: IncreaseSeatsIn, user: User = Depends(
     extra = body.new_seats - booking.seats
     if trip.seats_available < extra:
         raise HTTPException(400, "Haydovchida yetarli bo'sh joy yo'q.")
-    trip.seats_available -= extra
-    booking.seats = body.new_seats
-    if trip.seats_available == 0:
-        assert_transition(TRIP_TRANSITIONS, trip.status, "FULL")
-        trip.status = "FULL"
+    booking.pending_seats = body.new_seats
     driver = db.get(DriverProfile, trip.driver_id)
     if driver:
         notify(
             db,
             user_id=driver.user_id,
-            title="Yo‘lovchilar soni oshdi",
-            body=f"{trip.from_text} → {trip.to_text}: endi {body.new_seats} kishi.",
-            type="seats_increased",
+            title="Yo‘lovchilar sonini oshirish so‘rovi",
+            body=f"{trip.from_text} → {trip.to_text}: {body.new_seats} kishiga oshirishni so‘rayapti.",
+            type="seats_increase_requested",
+            related_type="trip_booking",
+            related_id=booking.id,
+        )
+    db.commit()
+    db.refresh(booking)
+    return booking_out(db, booking)
+
+
+@router.post("/bookings/{booking_id}/respond-seat-increase", response_model=TripBookingOut)
+def respond_seat_increase(
+    booking_id: int,
+    body: SeatIncreaseRespondIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Haydovchi yo'lovchining o'rindiq sonini oshirish so'rovini
+    TASDIQLAYDI (haqiqatan amalga oshiradi) yoki RAD ETADI (joriy son
+    o'zgarishsiz qoladi)."""
+    booking = db.get(TripBooking, booking_id)
+    if not booking:
+        raise HTTPException(404, "Band qilish topilmadi.")
+    trip = db.get(Trip, booking.trip_id)
+    driver = db.query(DriverProfile).filter(DriverProfile.user_id == user.id).first()
+    is_owner_driver = driver is not None and trip is not None and trip.driver_id == driver.id
+    if not is_owner_driver:
+        raise HTTPException(403, "Bu amalni bajarish huquqingiz yo‘q.")
+    if booking.pending_seats is None:
+        raise HTTPException(400, "Kutilayotgan o'rindiq oshirish so'rovi yo'q.")
+    pending = booking.pending_seats
+    if body.accept:
+        extra = pending - booking.seats
+        if trip.seats_available < extra:
+            raise HTTPException(400, "Haydovchida yetarli bo'sh joy yo'q.")
+        trip.seats_available -= extra
+        booking.seats = pending
+        booking.pending_seats = None
+        if trip.seats_available == 0:
+            assert_transition(TRIP_TRANSITIONS, trip.status, "FULL")
+            trip.status = "FULL"
+        notify(
+            db,
+            user_id=booking.passenger_id,
+            title="O‘rindiq sonini oshirish tasdiqlandi",
+            body=f"{trip.from_text} → {trip.to_text}: endi {pending} kishi.",
+            type="seats_increase_accepted",
+            related_type="trip_booking",
+            related_id=booking.id,
+        )
+    else:
+        booking.pending_seats = None
+        notify(
+            db,
+            user_id=booking.passenger_id,
+            title="O‘rindiq sonini oshirish rad etildi",
+            body=f"{trip.from_text} → {trip.to_text}: haydovchi {booking.seats} kishilik joyni saqlab qoldi.",
+            type="seats_increase_declined",
             related_type="trip_booking",
             related_id=booking.id,
         )

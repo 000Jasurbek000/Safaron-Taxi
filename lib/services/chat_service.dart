@@ -85,7 +85,7 @@ class ChatThread {
 
   String get timeLabel {
     final now = DateTime.now();
-    final d = updatedAt;
+    final d = updatedAt.toLocal();
     if (now.year == d.year && now.month == d.month && now.day == d.day) {
       return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
     }
@@ -271,10 +271,19 @@ class ChatService extends ChangeNotifier {
         changed = true;
       }
     }
-    if (!changed) return;
-    _storeThread(thread, DateTime.now());
-    await _persist();
-    notifyListeners();
+    if (changed) {
+      _storeThread(thread, DateTime.now());
+      await _persist();
+      notifyListeners();
+    }
+    if (thread.remoteTripId != null) {
+      try {
+        await MessageApi.instance.markRead(tripId: thread.remoteTripId);
+      } catch (_) {
+        // Internet yo'q — mahalliy holat baribir yangilandi, keyingi
+        // muvaffaqiyatli chaqiriqda serverga yetib boradi.
+      }
+    }
   }
 
   Future<void> markReadForDriver(String taxiId) async {
@@ -288,10 +297,16 @@ class ChatService extends ChangeNotifier {
         changed = true;
       }
     }
-    if (!changed) return;
-    _storeThread(thread, DateTime.now());
-    await _persist();
-    notifyListeners();
+    if (changed) {
+      _storeThread(thread, DateTime.now());
+      await _persist();
+      notifyListeners();
+    }
+    if (thread.remoteTripId != null) {
+      try {
+        await MessageApi.instance.markRead(tripId: thread.remoteTripId);
+      } catch (_) {}
+    }
   }
 
   List<ChatMessage> messagesFor(String taxiId, {bool asDriver = false}) {

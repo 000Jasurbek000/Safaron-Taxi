@@ -178,6 +178,17 @@ class _OrderCard extends StatelessWidget {
     );
   }
 
+  Future<void> _respondSeatIncrease(BuildContext context, bool accept) async {
+    final err = await DriverTripService.instance.respondSeatIncrease(order.id, accept);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(err ?? (accept ? tr('Qabul qilindi.') : tr('Rad etildi — joriy son saqlanadi.'))),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   Future<void> _acceptAtOffered(BuildContext context) async {
     final eta = await askDriverEtaMinutes(
       context,
@@ -449,6 +460,61 @@ class _OrderCard extends StatelessWidget {
               ),
             ],
           ] else ...[
+            if (order.pendingSeats != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: const Color(0xFFFFF3E0), borderRadius: BorderRadius.circular(10)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tr('Yo‘lovchi {count} kishiga oshirishni so‘radi').replaceAll('{count}', '${order.pendingSeats}'),
+                      style: GoogleFonts.montserrat(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFFE65100)),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${tr('Qabul qilsangiz jami narx')}: ${formatSom(order.displayPrice * order.pendingSeats!)}',
+                      style: GoogleFonts.montserrat(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMuted),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 38,
+                            child: ElevatedButton(
+                              onPressed: () => _respondSeatIncrease(context, true),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: accent,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              child: Text(tr('Qabul qilish'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 12)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: SizedBox(
+                            height: 38,
+                            child: OutlinedButton(
+                              onPressed: () => _respondSeatIncrease(context, false),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.destination,
+                                side: const BorderSide(color: AppColors.destination, width: 1.5),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              child: Text(tr('Rad etish'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 12)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
             Row(
               children: [
                 Expanded(

@@ -33,12 +33,17 @@ class _DriverChatScreenState extends State<DriverChatScreen> {
     super.initState();
     _chat.ensureThread(widget.taxi);
     _chat.addListener(_onChange);
+    _markRead();
     // ignore: unawaited_futures
-    _chat.syncFromServer(widget.taxi.id);
-    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
-      // ignore: unawaited_futures
-      _chat.syncFromServer(widget.taxi.id);
+    _chat.syncFromServer(widget.taxi.id).then((_) => _markRead());
+    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
+      await _chat.syncFromServer(widget.taxi.id);
+      if (mounted) _markRead();
     });
+  }
+
+  Future<void> _markRead() {
+    return widget.asDriver ? _chat.markReadForDriver(widget.taxi.id) : _chat.markRead(widget.taxi.id);
   }
 
   void _onChange() {
@@ -169,7 +174,7 @@ class _DriverChatScreenState extends State<DriverChatScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${msg.at.hour.toString().padLeft(2, '0')}:${msg.at.minute.toString().padLeft(2, '0')}',
+                          '${msg.at.toLocal().hour.toString().padLeft(2, '0')}:${msg.at.toLocal().minute.toString().padLeft(2, '0')}',
                           style: GoogleFonts.montserrat(
                             color: msg.mine
                                 ? Colors.white.withValues(alpha: 0.75)

@@ -139,7 +139,7 @@ class _TripEarningTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final d = record.completedAt;
+    final d = record.completedAt.toLocal();
     final dateLabel =
         '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year} · ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
