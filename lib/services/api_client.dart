@@ -420,6 +420,17 @@ class ApiClient extends ChangeNotifier {
 
     if (res.statusCode == 401) {
 
+      // Agar joriy token internetga ulanib bo'lmagan paytda yaratilgan
+      // mahalliy-soxta "oflayn" hisobga tegishli bo'lsa (haqiqiy JWT emas),
+      // "sessiya tugadi" xabari chalg'ituvchi — foydalanuvchi aslida hech
+      // qachon haqiqiy hisobga kirmagan edi. Buni aniq tushuntiramiz.
+      if (token != null && token!.startsWith('offline_')) {
+        throw ApiException(
+          'Ro‘yxatdan o‘tishda internet aloqasi yo‘q edi, shuning uchun hisobingiz vaqtincha mahalliy (oflayn) rejimda yaratilgan. Bu amal uchun internetga ulanib, ilovadan chiqib qaytadan kiring.',
+          statusCode: 401,
+        );
+      }
+
       throw ApiException(detail.isEmpty ? 'Sessiya muddati tugagan. Qayta kiring.' : detail, statusCode: 401);
 
     }
