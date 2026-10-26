@@ -67,35 +67,43 @@ def seed(db: Session) -> None:
         if not db.query(SystemSetting).filter(SystemSetting.key == k).first():
             db.add(SystemSetting(key=k, value=v))
 
-    for name, typ, aliases, lat, lng in SEED_LOCATIONS:
-        loc = db.query(Location).filter(Location.name == name).first()
-        if loc is None:
-            # Admin shu seed joyini qayta nomlagan/aliasini o'zgartirgan bo'lishi
-            # mumkin — agar aliaslardan biri allaqachon boshqa joyga tegishli
-            # bo'lsa, bu joy allaqachon seed qilingan deb hisoblab, qayta
-            # yaratmaymiz (aks holda uq_location_alias buziladi).
-            existing_alias = (
-                db.query(LocationAlias).filter(LocationAlias.alias.in_(aliases)).first()
-                if aliases
-                else None
-            )
-            if existing_alias is not None:
-                continue
-            loc = Location(
-                name=name,
-                type=typ,
-                latitude=lat,
-                longitude=lng,
-                is_approved=True,
-                is_active=True,
-            )
-            db.add(loc)
-            db.flush()
-            for a in aliases:
-                db.add(LocationAlias(location_id=loc.id, alias=a))
-        elif loc.latitude is None or loc.longitude is None:
-            loc.latitude = lat
-            loc.longitude = lng
+    # Standart joylar FAQAT bitta marta (butun loyiha tarixida) urug'lanadi.
+    # Bu tekshiruv bo'lmasa, pastdagi tsikl faqat "shu nom bilan joy mavjud
+    # emasmi" deb qaraydi — admin bu joyni ATAYLAB o'chirgan bo'lsa ham xuddi
+    # shu holatga tushib qoladi, shuning uchun har bir server qayta ishga
+    # tushishida (har bir deploy, restart) o'chirilgan joy qaytadan
+    # yaratilib, adminning o'chirishini abadiy bekor qilib qo'yardi.
+    if not db.query(SystemSetting).filter(SystemSetting.key == "locations_seeded").first():
+        for name, typ, aliases, lat, lng in SEED_LOCATIONS:
+            loc = db.query(Location).filter(Location.name == name).first()
+            if loc is None:
+                # Admin shu seed joyini qayta nomlagan/aliasini o'zgartirgan bo'lishi
+                # mumkin — agar aliaslardan biri allaqachon boshqa joyga tegishli
+                # bo'lsa, bu joy allaqachon seed qilingan deb hisoblab, qayta
+                # yaratmaymiz (aks holda uq_location_alias buziladi).
+                existing_alias = (
+                    db.query(LocationAlias).filter(LocationAlias.alias.in_(aliases)).first()
+                    if aliases
+                    else None
+                )
+                if existing_alias is not None:
+                    continue
+                loc = Location(
+                    name=name,
+                    type=typ,
+                    latitude=lat,
+                    longitude=lng,
+                    is_approved=True,
+                    is_active=True,
+                )
+                db.add(loc)
+                db.flush()
+                for a in aliases:
+                    db.add(LocationAlias(location_id=loc.id, alias=a))
+            elif loc.latitude is None or loc.longitude is None:
+                loc.latitude = lat
+                loc.longitude = lng
+        db.add(SystemSetting(key="locations_seeded", value="true"))
 
     # Test passenger
     p_phone = "+998901234567"
