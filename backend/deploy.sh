@@ -203,6 +203,7 @@ if command -v rsync >/dev/null 2>&1; then
         --exclude='.env' \
         --exclude='data/' \
         --exclude='uploads/' \
+        --exclude='releases/' \
         --exclude='passenger_wsgi.py' \
         --exclude='deploy.sh' \
         --exclude='public/' \
@@ -225,6 +226,7 @@ protected = {
     ".env",
     "data",
     "uploads",
+    "releases",
     "passenger_wsgi.py",
     "deploy.sh",
     "public",
@@ -427,6 +429,7 @@ echo "Database: PRESERVED"
 echo ".env    : PRESERVED"
 echo "Uploads : PRESERVED"
 echo "Data    : PRESERVED"
+echo "Releases: PRESERVED"
 echo "Passenger: RESTARTED"
 echo "Health  : OK"
 echo
