@@ -78,22 +78,26 @@ class PlaceRegistryService extends ChangeNotifier {
     try {
       final remote = await LocationApi.instance.search(null);
       if (remote.isEmpty) return;
-      final merged = <int, PlaceRecord>{};
-      for (final p in _defaults) {
-        merged[p.id] = p;
-      }
-      for (final item in remote) {
-        merged[item.id] = PlaceRecord(
-          id: item.id,
-          name: item.name,
-          type: item.type,
-          latitude: item.latitude ?? merged[item.id]?.latitude,
-          longitude: item.longitude ?? merged[item.id]?.longitude,
-          radiusM: item.radiusM ?? merged[item.id]?.radiusM,
-          aliases: item.aliases,
-        );
-      }
-      _places = merged.values.toList()..sort((a, b) => a.name.compareTo(b.name));
+      // `_defaults` faqat birinchi muvaffaqiyatli serverga ulanishgacha
+      // (oflayn/ilk ochilish) ishlatiladi — ularning id'lari (1, 2, 3...)
+      // haqiqiy server id'lari (masalan 115, 120...) bilan sira mos
+      // kelmaydi, shuning uchun avval shu ikkisini id bo'yicha birlashtirish
+      // har bir joyni IKKI marta (bitta eski qattiq kodlangan nusxa, bitta
+      // haqiqiy server nusxasi) ko'rsatardi. Server ro'yxati kelgach, u
+      // to'liq haqiqiy manba — defaults bilan aralashtirmasdan shu bilan
+      // almashtiriladi.
+      _places = remote
+          .map((item) => PlaceRecord(
+                id: item.id,
+                name: item.name,
+                type: item.type,
+                latitude: item.latitude,
+                longitude: item.longitude,
+                radiusM: item.radiusM,
+                aliases: item.aliases,
+              ))
+          .toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_cacheKey, jsonEncode(_places.map((e) => e.toJson()).toList()));
       notifyListeners();
