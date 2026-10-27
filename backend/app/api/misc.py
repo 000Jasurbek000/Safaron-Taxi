@@ -82,6 +82,13 @@ def send_message(body: MessageIn, user: User = Depends(get_current_user), db: Se
     text = body.body.strip()
     if not text:
         raise HTTPException(400, "Xabar bo‘sh bo‘lishi mumkin emas.")
+    # request_id/trip_id ikkisi ham berilmagan holat qasddan rad etiladi —
+    # aks holda bu yerdagi tekshiruvlar butunlay o'tkazib yuborilib, chat
+    # faqat tasdiqlangan safarda ochiladigan qoida chetlab o'tilar, va
+    # istalgan foydalanuvchi istalgan receiver_id'ga, umuman umumiy safari
+    # bo'lmasa ham, xabar yubora olardi.
+    if not body.request_id and not body.trip_id:
+        raise HTTPException(400, "Xabar faqat safar/so‘rov bilan bog‘liq bo‘lishi kerak.")
     if body.request_id:
         req = db.get(TripRequest, body.request_id)
         if not req or req.status not in ("CONFIRMED", "DRIVER_ON_WAY", "PASSENGER_PICKED", "IN_PROGRESS", "COMPLETED"):
@@ -182,14 +189,57 @@ def mark_messages_read(
 
 @router.post("/ratings", response_model=OkResponse)
 def rate(body: RatingIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # request_id/trip_id ikkisi ham berilmagan holat qasddan rad etiladi —
+    # aks holda quyidagi "yakunlangan safar" va "shu safardagi hamrohni
+    # baholash" tekshiruvlari butunlay o'tkazib yuborilib, istalgan
+    # foydalanuvchi hech qachon birga safar qilmagan boshqa birovning
+    # reytingini (to_user_id) cheksiz marta erkin manipulyatsiya qila
+    # olardi.
+    if not body.request_id and not body.trip_id:
+        raise HTTPException(400, "Baho faqat yakunlangan safar/so‘rov bo‘yicha qo‘yiladi.")
     if body.request_id:
         req = db.get(TripRequest, body.request_id)
         if not req or req.status != "COMPLETED":
             raise HTTPException(400, "Faqat yakunlangan safarni baholash mumkin.")
+        driver = db.query(DriverProfile).filter(DriverProfile.user_id == user.id).first()
+        is_passenger = req.passenger_id == user.id
+        is_driver = driver is not None and req.selected_driver_id == driver.id
+        if not is_passenger and not is_driver:
+            raise HTTPException(403, "Bu safarga baho qo‘yish huquqingiz yo‘q.")
+        counterpart_id = None
+        if is_passenger and req.selected_driver_id:
+            d = db.get(DriverProfile, req.selected_driver_id)
+            counterpart_id = d.user_id if d else None
+        elif is_driver:
+            counterpart_id = req.passenger_id
+        if counterpart_id is None or counterpart_id != body.to_user_id:
+            raise HTTPException(400, "Faqat shu safardagi hamrohingizni baholashingiz mumkin.")
         exists = db.query(Rating).filter(Rating.request_id == body.request_id, Rating.from_user_id == user.id).first()
         if exists:
             raise HTTPException(400, "Siz allaqachon baho bergansiz.")
-    elif body.trip_id:
+    else:
+        trip = db.get(Trip, body.trip_id)
+        if not trip:
+            raise HTTPException(404, "Safar topilmadi.")
+        driver = db.query(DriverProfile).filter(DriverProfile.user_id == user.id).first()
+        is_owner_driver = driver is not None and trip.driver_id == driver.id
+        if is_owner_driver:
+            booking = (
+                db.query(TripBooking)
+                .filter(TripBooking.trip_id == trip.id, TripBooking.status == "COMPLETED", TripBooking.passenger_id == body.to_user_id)
+                .first()
+            )
+            counterpart_id = booking.passenger_id if booking else None
+        else:
+            booking = (
+                db.query(TripBooking)
+                .filter(TripBooking.trip_id == trip.id, TripBooking.status == "COMPLETED", TripBooking.passenger_id == user.id)
+                .first()
+            )
+            trip_driver = db.get(DriverProfile, trip.driver_id)
+            counterpart_id = trip_driver.user_id if trip_driver else None
+        if booking is None or counterpart_id is None or counterpart_id != body.to_user_id:
+            raise HTTPException(403, "Bu safarga baho qo‘yish huquqingiz yo‘q.")
         exists = db.query(Rating).filter(Rating.trip_id == body.trip_id, Rating.from_user_id == user.id).first()
         if exists:
             raise HTTPException(400, "Siz allaqachon baho bergansiz.")
