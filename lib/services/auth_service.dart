@@ -109,27 +109,43 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<({bool exists, String firstName, String lastName, String fullName, String role})> lookupPhone(String phone) async {
+  /// Bu raqam ro'yxatdan o'tganmi — server qasddan ism/rol kabi shaxsiy
+  /// ma'lumot qaytarmaydi (faqat bor/yo'qligi), aks holda parolni
+  /// bilmagan odam ham o'zganing raqami ro'yxatdaligini va kim ekanini
+  /// bilib olardi.
+  Future<bool> lookupPhone(String phone) async {
     try {
       final data = await ApiClient.instance.get('/api/auth/lookup', query: {'phone': phone});
       final map = data as Map<String, dynamic>;
-      return (
-        exists: map['exists'] == true,
-        firstName: map['first_name'] as String? ?? '',
-        lastName: map['last_name'] as String? ?? '',
-        fullName: map['full_name'] as String? ?? '',
-        role: map['active_role'] as String? ?? 'passenger',
-      );
+      return map['exists'] == true;
     } catch (_) {
-      return (exists: false, firstName: '', lastName: '', fullName: '', role: 'passenger');
+      return false;
     }
   }
 
-  /// SMSsiz kirish — telefon + ism + familiya.
-  Future<void> signInWithProfile({
+  /// Mavjud raqamga parol bilan kirish.
+  Future<void> login({required String phone, required String password}) async {
+    try {
+      final data = await ApiClient.instance.post('/api/auth/sign-in', body: {
+        'phone': phone,
+        'password': password,
+      });
+      await _applySignIn(data as Map<String, dynamic>);
+    } on ApiException catch (e) {
+      if (_isConnectionError(e)) {
+        await _signInOffline(phone: phone, firstName: '', lastName: '');
+        return;
+      }
+      rethrow;
+    }
+  }
+
+  /// Yangi raqam — ism, familiya va parol bilan ro'yxatdan o'tish.
+  Future<void> register({
     required String phone,
     required String firstName,
     required String lastName,
+    required String password,
     String? referralCode,
   }) async {
     try {
@@ -137,15 +153,10 @@ class AuthService extends ChangeNotifier {
         'phone': phone,
         'first_name': firstName,
         'last_name': lastName,
+        'password': password,
         if (referralCode != null && referralCode.trim().isNotEmpty) 'referral_code': referralCode.trim(),
       });
-      final map = data as Map<String, dynamic>;
-      await ApiClient.instance.setToken(map['access_token'] as String);
-      user = AuthUser.fromJson(map['user'] as Map<String, dynamic>);
-      registered = true;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_kRegistered, true);
-      notifyListeners();
+      await _applySignIn(data as Map<String, dynamic>);
     } on ApiException catch (e) {
       if (_isConnectionError(e)) {
         await _signInOffline(phone: phone, firstName: firstName, lastName: lastName);
@@ -155,6 +166,15 @@ class AuthService extends ChangeNotifier {
     }
     // Boshqa (kutilmagan) xatolar — masalan, serverdan noto‘g‘ri formatdagi javob —
     // jim-jim soxta offline hisob yaratmasin, xato yuqoriga chiqsin.
+  }
+
+  Future<void> _applySignIn(Map<String, dynamic> map) async {
+    await ApiClient.instance.setToken(map['access_token'] as String);
+    user = AuthUser.fromJson(map['user'] as Map<String, dynamic>);
+    registered = true;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kRegistered, true);
+    notifyListeners();
   }
 
   Future<void> _signInOffline({

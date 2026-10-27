@@ -15,7 +15,9 @@ import '../../utils/phone_uz.dart';
 import '../../widgets/app_ui.dart';
 import '../../widgets/safaron_logo.dart';
 
-/// Telefon + ism + familiya. Mavjud raqam — eski profil yuklanadi.
+/// Telefon raqami kiritiladi: mavjud bo'lsa faqat parol so'raladi
+/// (kirish), mavjud bo'lmasa ism/familiya + parol bilan ro'yxatdan
+/// o'tiladi.
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -29,10 +31,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _phone = TextEditingController();
   final _referral = TextEditingController();
   final _code = TextEditingController();
+  final _password = TextEditingController();
 
   bool _submitting = false;
   bool _lookingUp = false;
   bool _existingUser = false;
+  bool _obscurePassword = true;
   String? _error;
   Timer? _lookupTimer;
 
@@ -53,6 +57,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _phone.addListener(_onPhoneChanged);
     _referral.addListener(onFieldChange);
     _code.addListener(onFieldChange);
+    _password.addListener(onFieldChange);
   }
 
   @override
@@ -63,6 +68,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _phone.dispose();
     _referral.dispose();
     _code.dispose();
+    _password.dispose();
     super.dispose();
   }
 
@@ -82,15 +88,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final phone = PhoneUz.normalize(_phone.text);
     if (phone == null || !mounted) return;
     setState(() => _lookingUp = true);
-    final found = await AuthService.instance.lookupPhone(phone);
+    // Faqat bor/yo'qligini so'raymiz — mavjud hisobning ismi/roli kabi
+    // ma'lumotlarini bu bosqichda ko'rsatish shart emas (parol hali
+    // tasdiqlanmagan).
+    final exists = await AuthService.instance.lookupPhone(phone);
     if (!mounted) return;
     setState(() {
       _lookingUp = false;
-      _existingUser = found.exists;
-      if (found.exists) {
-        if (found.firstName.isNotEmpty) _name.text = found.firstName;
-        if (found.lastName.isNotEmpty) _surname.text = found.lastName;
-      }
+      _existingUser = exists;
     });
   }
 
@@ -105,9 +110,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return nameOk && surOk;
   }
 
+  bool get _passwordOk => _password.text.isNotEmpty;
+
   bool get _canSubmit {
     if (_submitting || !_phoneOk) return false;
     if (_otpStep) return _code.text.trim().length >= 4;
+    if (!_passwordOk) return false;
     if (_existingUser) return true;
     return _namesOk;
   }
@@ -136,11 +144,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
           lastName: _surname.text.trim(),
           referralCode: _referral.text.trim(),
         );
+      } else if (_existingUser) {
+        await AuthService.instance.login(
+          phone: phone,
+          password: _password.text,
+        );
       } else {
-        await AuthService.instance.signInWithProfile(
+        await AuthService.instance.register(
           phone: phone,
           firstName: _name.text.trim(),
           lastName: _surname.text.trim(),
+          password: _password.text,
           referralCode: _referral.text.trim(),
         );
       }
@@ -274,19 +288,58 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  SoftField(
-                    controller: _name,
-                    hint: AppStrings.t('first_name'),
-                    icon: Icons.person_outline_rounded,
-                  ),
-                  const SizedBox(height: 10),
-                  SoftField(
-                    controller: _surname,
-                    hint: AppStrings.t('last_name'),
-                    icon: Icons.badge_outlined,
-                  ),
-                  if (!_existingUser) ...[
+                  if (_existingUser) ...[
+                    const SizedBox(height: 10),
+                    SoftField(
+                      controller: _password,
+                      hint: AppStrings.t('password_field'),
+                      icon: Icons.lock_outline_rounded,
+                      obscureText: _obscurePassword,
+                      suffix: IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          color: AppColors.textMuted,
+                          size: 20,
+                        ),
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      ),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 10),
+                    SoftField(
+                      controller: _name,
+                      hint: AppStrings.t('first_name'),
+                      icon: Icons.person_outline_rounded,
+                    ),
+                    const SizedBox(height: 10),
+                    SoftField(
+                      controller: _surname,
+                      hint: AppStrings.t('last_name'),
+                      icon: Icons.badge_outlined,
+                    ),
+                    const SizedBox(height: 10),
+                    SoftField(
+                      controller: _password,
+                      hint: AppStrings.t('password_field'),
+                      icon: Icons.lock_outline_rounded,
+                      obscureText: _obscurePassword,
+                      suffix: IconButton(
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          color: AppColors.textMuted,
+                          size: 20,
+                        ),
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      ),
+                    ),
                     const SizedBox(height: 10),
                     SoftField(
                       controller: _referral,

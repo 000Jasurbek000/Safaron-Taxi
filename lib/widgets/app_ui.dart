@@ -117,6 +117,8 @@ class SoftField extends StatelessWidget {
     this.maxLength,
     this.inputFormatters,
     this.readOnly = false,
+    this.obscureText = false,
+    this.suffix,
   });
 
   final TextEditingController controller;
@@ -124,10 +126,12 @@ class SoftField extends StatelessWidget {
   final IconData icon;
   final TextInputType? keyboardType;
   final Widget? prefix;
+  final Widget? suffix;
   final ValueChanged<String>? onChanged;
   final int? maxLength;
   final List<TextInputFormatter>? inputFormatters;
   final bool readOnly;
+  final bool obscureText;
 
   @override
   Widget build(BuildContext context) {
@@ -148,6 +152,7 @@ class SoftField extends StatelessWidget {
               controller: controller,
               keyboardType: keyboardType,
               readOnly: readOnly,
+              obscureText: obscureText,
               onChanged: onChanged,
               maxLength: maxLength,
               inputFormatters: inputFormatters,
@@ -169,6 +174,7 @@ class SoftField extends StatelessWidget {
               ),
             ),
           ),
+          if (suffix != null) ...[const SizedBox(width: 6), suffix!],
         ],
       ),
     );

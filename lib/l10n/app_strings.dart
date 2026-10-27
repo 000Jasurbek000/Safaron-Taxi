@@ -115,11 +115,12 @@ class AppStrings {
     'register_subtitle':
         'Ism, familiya va telefon raqamingiz yetarli',
     'existing_user_banner':
-        'Bu telefon allaqachon ro‘yxatda. Eski ma’lumotlar yuklandi.',
+        'Bu raqam ro‘yxatdan o‘tgan. Davom etish uchun parolingizni kiriting.',
     'login_existing_title': 'Hisobga kirish',
     'login_existing_btn': 'Kirish',
     'first_name': 'Ism *',
     'last_name': 'Familiya *',
+    'password_field': 'Parol *',
     'continue_btn': 'Davom etish',
 
     'waiting': 'Kutilmoqda...',
@@ -370,11 +371,12 @@ class AppStrings {
     'register_subtitle':
         'Исм, фамилия ва телефон рақамингиз етарли',
     'existing_user_banner':
-        'Бу телефон аллақачон рўйхатда. Эски маълумотлар юкланди.',
+        'Бу рақам рўйхатдан ўтган. Давом этиш учун паролингизни киритинг.',
     'login_existing_title': 'Ҳисобга кириш',
     'login_existing_btn': 'Кириш',
     'first_name': 'Исм *',
     'last_name': 'Фамилия *',
+    'password_field': 'Парол *',
     'continue_btn': 'Давом этиш',
 
     'waiting': 'Кутилмоқда...',
@@ -650,11 +652,12 @@ class AppStrings {
     'register_subtitle':
         'Достаточно имени, фамилии и номера телефона',
     'existing_user_banner':
-        'Этот номер уже зарегистрирован. Загружены прежние данные.',
+        'Этот номер уже зарегистрирован. Введите пароль, чтобы продолжить.',
     'login_existing_title': 'Вход в аккаунт',
     'login_existing_btn': 'Войти',
     'first_name': 'Имя *',
     'last_name': 'Фамилия *',
+    'password_field': 'Пароль *',
     'continue_btn': 'Продолжить',
 
     'waiting': 'Подождите...',
@@ -926,11 +929,12 @@ class AppStrings {
     'register_subtitle':
         'Аты-жөніңіз бен телефон нөміріңіз жеткілікті',
     'existing_user_banner':
-        'Бұл телефон әлдеқашан тіркелген. Ескі деректер жүктелді.',
+        'Бұл нөмір тіркелген. Жалғастыру үшін құпия сөзді енгізіңіз.',
     'login_existing_title': 'Аккаунтқа кіру',
     'login_existing_btn': 'Кіру',
     'first_name': 'Аты *',
     'last_name': 'Тегі *',
+    'password_field': 'Құпия сөз *',
     'continue_btn': 'Жалғастыру',
 
     'waiting': 'Күтілуде...',
