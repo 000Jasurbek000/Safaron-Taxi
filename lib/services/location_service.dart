@@ -19,6 +19,11 @@ class LocationService extends ChangeNotifier {
   final Set<String> _trackedDriverIds = {};
   Timer? _timer;
   bool _running = false;
+  // Foydalanuvchi ruxsatni bir marta rad etgandan keyin, har 10 soniyalik
+  // tick OS'ning ruxsat oynasini qayta-qayta ochmasligi uchun. Sozlamalardan
+  // qo'lda yoqilsa, checkPermission() buni avtomatik payqaydi — qayta
+  // so'rash shart emas.
+  bool _permissionDeniedOnce = false;
 
   void registerDrivers(Iterable<String> taxiIds) {
     _trackedDriverIds
@@ -38,13 +43,17 @@ class LocationService extends ChangeNotifier {
     _timer?.cancel();
     _timer = null;
     _running = false;
+    _permissionDeniedOnce = false;
   }
 
   Future<void> _tick() async {
     try {
       var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
+      if (perm == LocationPermission.denied && !_permissionDeniedOnce) {
         perm = await Geolocator.requestPermission();
+        if (perm == LocationPermission.denied) {
+          _permissionDeniedOnce = true;
+        }
       }
       if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
         passengerLat ??= _karakalpakCenter.lat;
@@ -52,6 +61,7 @@ class LocationService extends ChangeNotifier {
         notifyListeners();
         return;
       }
+      _permissionDeniedOnce = false;
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
       );
