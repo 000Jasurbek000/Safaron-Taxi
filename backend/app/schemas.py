@@ -62,18 +62,17 @@ class VerifyOtpIn(UTCModel):
 
 class SignInIn(UTCModel):
     phone: str
+    password: str
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     referral_code: Optional[str] = None
 
 
 class PhoneLookupOut(UTCModel):
+    # Qasddan faqat `exists` — ro'yxatdagi raqamning egasi kim ekanini
+    # (ism, rol) avtorizatsiyasiz oshkor qilish, parolni bilmagan odamga
+    # ham o'zganing profilini "ko'rib chiqish" imkonini berardi.
     exists: bool
-    first_name: str = ""
-    last_name: str = ""
-    full_name: str = ""
-    phone_display: str = ""
-    active_role: str = "passenger"
 
 
 class UserOut(UTCModel):

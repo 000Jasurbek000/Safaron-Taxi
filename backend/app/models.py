@@ -29,6 +29,10 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     phone: Mapped[str] = mapped_column(String(20), unique=True, index=True, nullable=False)
+    # Parolsiz yaratilgan eski hisoblarda hali ham NULL bo'lishi mumkin —
+    # shunday hisob birinchi marta /auth/sign-in orqali kirganda shu
+    # maydonga parol o'rnatiladi (auth.py: sign_in).
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     first_name: Mapped[str] = mapped_column(String(80), nullable=False)
     last_name: Mapped[str] = mapped_column(String(80), nullable=False)
     avatar_path: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

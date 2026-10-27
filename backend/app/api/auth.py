@@ -8,7 +8,7 @@ from app.database import get_db
 from app.deps import get_current_user
 from app.models import OtpCode, User
 from app.schemas import OkResponse, PhoneLookupOut, SendOtpIn, SendOtpOut, SignInIn, TokenResponse, UserOut, VerifyOtpIn
-from app.security import create_access_token
+from app.security import create_access_token, hash_password, verify_password
 from app.services.phone import normalize_phone, validate_name
 from app.services.rewards import attach_referral, ensure_code, flag_on
 from app.services.serializers import user_out
@@ -82,10 +82,18 @@ def verify_otp(body: VerifyOtpIn, db: Session = Depends(get_db)):
 
 @router.post("/sign-in", response_model=TokenResponse)
 def sign_in(body: SignInIn, db: Session = Depends(get_db)):
-    """SMSsiz kirish / ro‘yxatdan o‘tish — telefon + ism + familiya."""
+    """SMSsiz kirish / ro‘yxatdan o‘tish — telefon + parol (+ yangi raqam
+    uchun ism-familiya). Avval bu yerda parol umuman tekshirilmasdan,
+    shunchaki mavjud telefon raqamiga token berilardi — buni bilgan
+    har kim o'zganing hisobiga kirib ola olardi. Endi: raqam mavjud
+    bo'lsa parol mos kelishi shart; mavjud bo'lmasa, shu parol bilan
+    yangi hisob ochiladi."""
     phone = normalize_phone(body.phone)
     if not phone:
         raise HTTPException(400, "Telefon raqami noto‘g‘ri.")
+    password = body.password or ""
+    if not password:
+        raise HTTPException(400, "Parol kiritilishi shart.")
 
     user = db.query(User).options(joinedload(User.driver_profile)).filter(User.phone == phone).first()
     if user is None:
@@ -93,13 +101,18 @@ def sign_in(body: SignInIn, db: Session = Depends(get_db)):
         last = validate_name(body.last_name or "")
         if not first or not last:
             raise HTTPException(400, "Yangi raqam uchun ism va familiya to‘g‘ri kiritilishi shart.")
-        user = User(phone=phone, first_name=first, last_name=last)
+        user = User(phone=phone, first_name=first, last_name=last, password_hash=hash_password(password))
         db.add(user)
         db.flush()
         ensure_code(db, user)
         attach_referral(db, user, body.referral_code)
     else:
-        # Bir xil telefon = bitta akkaunt. FIO qanday bo‘lishidan qat’i nazar.
+        if user.password_hash is None:
+            # Parolsiz yaratilgan eski hisob — birinchi kirishda shu
+            # parol o'rnatiladi (keyingi kirishlarda shu bilan tekshiriladi).
+            user.password_hash = hash_password(password)
+        elif not verify_password(password, user.password_hash):
+            raise HTTPException(401, "Parol noto‘g‘ri.")
         if user.deleted_at is not None:
             # O'chirilgan hisob bilan qayta kirish — qayta faollashtiramiz,
             # aks holda admin panelda "ko'rinmas" foydalanuvchi bo'lib qoladi.
@@ -118,21 +131,15 @@ def sign_in(body: SignInIn, db: Session = Depends(get_db)):
 
 @router.get("/lookup", response_model=PhoneLookupOut)
 def lookup_phone(phone: str, db: Session = Depends(get_db)):
-    """Mavjud telefon — eski profilni qaytaradi (token talab qilmaydi)."""
+    """Bu raqam ro'yxatdan o'tganmi — UI shunga qarab parol maydonini
+    (mavjud bo'lsa) yoki ism/familiya+parol maydonlarini (mavjud
+    bo'lmasa) ko'rsatadi. Qasddan hisob egasi haqida boshqa hech narsa
+    qaytarmaydi (token talab qilmaydi)."""
     p = normalize_phone(phone)
     if not p:
         raise HTTPException(400, "Telefon raqami noto‘g‘ri.")
-    user = db.query(User).filter(User.phone == p, User.deleted_at.is_(None)).first()
-    if user is None:
-        return PhoneLookupOut(exists=False)
-    return PhoneLookupOut(
-        exists=True,
-        first_name=user.first_name or "",
-        last_name=user.last_name or "",
-        full_name=user.full_name or "",
-        phone_display=user.phone or p,
-        active_role=user.active_role or "passenger",
-    )
+    exists = db.query(User).filter(User.phone == p, User.deleted_at.is_(None)).first() is not None
+    return PhoneLookupOut(exists=exists)
 
 
 @router.get("/me", response_model=UserOut)

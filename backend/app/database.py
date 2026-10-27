@@ -36,6 +36,7 @@ def ensure_columns() -> None:
             ("verified_trip_count", "INTEGER DEFAULT 0"),
             ("deleted_at", "TIMESTAMP"),
             ("hide_phone", "BOOLEAN DEFAULT FALSE"),
+            ("password_hash", "VARCHAR(255)"),
         ],
         "admin_logs": [("ip", "VARCHAR(64)")],
         "locations": [("radius_m", "FLOAT")],
