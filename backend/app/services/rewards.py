@@ -382,12 +382,14 @@ def record_gps(db: Session, user: User, body: dict) -> TripCheck:
         raise HTTPException(400, "O‘z safaringizni o‘zingiz qabul qila olmaysiz.")
     target = body.get("status") or ("STARTED" if phase == "START" else "COMPLETED" if phase == "END" else check.status)
     allowed = _ALLOWED.get(check.status, set())
-    if target != check.status and target not in allowed and not (check.status == "REQUESTED" and target == "STARTED"):
-        if target not in allowed and target != check.status:
-            # STARTED from REQUESTED is allowed above; other illegal jumps rejected
-            if not (check.status == "REQUESTED" and target in ("STARTED", "ACCEPTED_BY_DRIVER")):
-                raise HTTPException(400, "Safar holatini orqaga qaytarib bo‘lmaydi.")
-    if target != check.status and (target in allowed or (check.status == "REQUESTED" and target in ("STARTED", "ACCEPTED_BY_DRIVER"))):
+    # REQUESTED holatidan STARTED/ACCEPTED_BY_DRIVER'ga sakrash alohida
+    # ruxsat etilgan — ko'p holatda haydovchi ACCEPTED_BY_DRIVER bosqichini
+    # alohida chaqirmasdan, to'g'ridan-to'g'ri START GPS nuqtasini yuboradi.
+    allowed_from_requested = {"STARTED", "ACCEPTED_BY_DRIVER"}
+    is_allowed = target == check.status or target in allowed or (check.status == "REQUESTED" and target in allowed_from_requested)
+    if not is_allowed:
+        raise HTTPException(400, "Safar holatini orqaga qaytarib bo‘lmaydi.")
+    if target != check.status:
         check.status = target
     db.add(
         TripLocationPoint(

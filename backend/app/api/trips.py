@@ -179,8 +179,12 @@ def get_booking(booking_id: int, user: User = Depends(get_current_user), db: Ses
 
 @router.post("/{trip_id}/book", response_model=TripBookingOut)
 def book_trip(trip_id: int, body: BookTripIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    trip = db.query(Trip).filter(Trip.id == trip_id).with_for_update(of=Trip).first() if False else db.query(Trip).filter(Trip.id == trip_id).first()
-    # SQLite: emulate lock with re-check
+    # SQLite qator-qulfini (SELECT ... FOR UPDATE) qo'llab-quvvatlamaydi —
+    # shuning uchun bu yerda band qilish shunchaki yaratiladi va haqiqiy
+    # joy-sonini kamaytirish/raqobat tekshiruvi keyinroq, qabul qilish
+    # bosqichida (respond_booking/confirm_counter) trip qayta o'qilib
+    # amalga oshiriladi.
+    trip = db.query(Trip).filter(Trip.id == trip_id).first()
     if not trip:
         raise HTTPException(404, "Safar topilmadi.")
     if trip.status != "OPEN":
@@ -296,7 +300,19 @@ def cancel_trip(trip_id: int, body: CancelIn, user: User = Depends(get_current_u
         db.commit()
         return OkResponse(ok=True, message="Safar bekor qilindi.")
 
-    booking = db.query(TripBooking).filter(TripBooking.trip_id == trip.id, TripBooking.passenger_id == user.id, TripBooking.status == "CONFIRMED").first()
+    # CONFIRMED bilan bir qatorda DRIVER_ON_WAY/PASSENGER_PICKED ham —
+    # bularda ham joy allaqachon band qilingan (quyida qaytariladi), shu
+    # uch holatning hech biri yo'qolib qolmasligi kerak (/bookings/{id}/cancel
+    # bilan bir xil "had_seats" mantiqi).
+    booking = (
+        db.query(TripBooking)
+        .filter(
+            TripBooking.trip_id == trip.id,
+            TripBooking.passenger_id == user.id,
+            TripBooking.status.in_(["CONFIRMED", "DRIVER_ON_WAY", "PASSENGER_PICKED"]),
+        )
+        .first()
+    )
     if not booking:
         raise HTTPException(403, "Bu amalni bajarish huquqingiz yo‘q.")
     booking.status = "CANCELLED"
