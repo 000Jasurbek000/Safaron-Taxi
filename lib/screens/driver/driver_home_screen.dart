@@ -12,9 +12,9 @@ import '../../services/profile_service.dart';
 import '../../services/trip_completion_service.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/eta_util.dart';
+import '../../utils/money.dart';
 import '../../widgets/booking_alert_banner.dart';
 import '../../widgets/driver_inbox_banner.dart';
-import '../../widgets/rating_dialog.dart';
 import '../../widgets/safaron_header.dart';
 import '../notifications/notifications_screen.dart';
 
@@ -275,6 +275,7 @@ class _LiveOrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final awaitingSelection = order.status == PassengerOrderStatus.awaitingSelection;
     final onWay = order.status == PassengerOrderStatus.onWay || order.status == PassengerOrderStatus.accepted;
     final picked = order.status == PassengerOrderStatus.pickedUp;
     return SoftCard(
@@ -298,6 +299,96 @@ class _LiveOrderCard extends StatelessWidget {
             Text(EtaUtil.countdownLabel(order.etaArriveAt!), style: GoogleFonts.montserrat(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primaryDark)),
           ],
           const SizedBox(height: 10),
+          if (order.pendingSeats != null)
+            // Yo'lovchining o'rindiq sonini oshirish so'rovi — avval bu
+            // faqat "Buyurtmalarim" ekranida ko'rinardi, haydovchi bosh
+            // sahifada qolib, "Buyurtmalarim"ga o'tmasa, so'rovni umuman
+            // ko'rmay qolardi.
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: const Color(0xFFFFF3E0), borderRadius: BorderRadius.circular(10)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tr('Yo‘lovchi {count} kishiga oshirishni so‘radi').replaceAll('{count}', '${order.pendingSeats}'),
+                    style: GoogleFonts.montserrat(fontSize: 12, fontWeight: FontWeight.w800, color: const Color(0xFFE65100)),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${tr('Qabul qilsangiz jami narx')}: ${formatSom(order.displayPrice * order.pendingSeats!)}',
+                    style: GoogleFonts.montserrat(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMuted),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 38,
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              final err = await DriverTripService.instance.respondSeatIncrease(order.id, true);
+                              if (context.mounted && err != null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(err), behavior: SnackBarBehavior.floating),
+                                );
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: AppColors.onPrimary,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            child: Text(tr('Qabul qilish'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 12)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: SizedBox(
+                          height: 38,
+                          child: OutlinedButton(
+                            onPressed: () async {
+                              final err = await DriverTripService.instance.respondSeatIncrease(order.id, false);
+                              if (context.mounted && err != null) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(err), behavior: SnackBarBehavior.floating),
+                                );
+                              }
+                            },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.destination,
+                              side: const BorderSide(color: AppColors.destination, width: 1.5),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            child: Text(tr('Rad etish'), style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 12)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          if (awaitingSelection)
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: const Color(0xFFF3F6FA), borderRadius: BorderRadius.circular(10)),
+              child: Row(
+                children: [
+                  Icon(Icons.hourglass_top_rounded, size: 16, color: AppColors.textMuted),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      tr('Javobingiz yuborildi — yo‘lovchi hali tanlamadi'),
+                      style: GoogleFonts.montserrat(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMuted),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           if (onWay)
             SizedBox(
               width: double.infinity,
@@ -326,16 +417,15 @@ class _LiveOrderCard extends StatelessWidget {
               height: 42,
               child: ElevatedButton(
                 onPressed: () async {
-                  final stars = await showTripRatingDialog(context, title: tr('Yo‘lovchini baholang'));
-                  if (stars == null) return;
+                  // Haydovchi yo'lovchini baholamaydi — bu yerda reyting
+                  // so'ralmaydi, faqat safar yakunlanadi.
                   final err = await DriverTripService.instance.completeOrder(
                     order.id,
                     completedBy: TripCompletedBy.driver,
-                    driverStars: stars,
                   );
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(err ?? '${tr('Safar yakunlandi')} · $stars★'), behavior: SnackBarBehavior.floating),
+                    SnackBar(content: Text(err ?? tr('Safar yakunlandi')), behavior: SnackBarBehavior.floating),
                   );
                 },
                 style: ElevatedButton.styleFrom(

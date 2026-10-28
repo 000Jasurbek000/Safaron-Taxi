@@ -10,7 +10,6 @@ import '../../services/app_refresh.dart';
 import '../../services/driver_trip_service.dart';
 import '../../services/trip_completion_service.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/rating_dialog.dart';
 import '../../utils/eta_util.dart';
 import '../../utils/money.dart';
 import '../../widgets/driver_eta_dialog.dart';
@@ -459,6 +458,27 @@ class _OrderCard extends StatelessWidget {
                 ),
               ),
             ],
+          ] else if (status == PassengerOrderStatus.awaitingSelection) ...[
+            // Men javob berdim (qabul/qarshi narx), ammo yo'lovchi hali meni
+            // TANLAMAGAN — bu bosqichda "Yo'lovchini oldim" tugmasi
+            // ko'rsatilmasligi kerak, chunki backend ham faqat tanlangan
+            // haydovchiga statusni o'zgartirishga ruxsat beradi.
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: const Color(0xFFF3F6FA), borderRadius: BorderRadius.circular(10)),
+              child: Row(
+                children: [
+                  Icon(Icons.hourglass_top_rounded, size: 16, color: AppColors.textMuted),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      tr('Javobingiz yuborildi — yo‘lovchi hali tanlamadi'),
+                      style: GoogleFonts.montserrat(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMuted),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ] else ...[
             if (order.pendingSeats != null)
               Container(
@@ -534,20 +554,16 @@ class _OrderCard extends StatelessWidget {
                     child: ElevatedButton(
                       onPressed: isPickedUp
                           ? () async {
-                              final stars = await showTripRatingDialog(
-                                context,
-                                title: trRateLabel(order.passengerName),
-                              );
-                              if (stars == null) return;
+                              // Haydovchi yo'lovchini baholamaydi — bu yerda
+                              // reyting so'ralmaydi, faqat safar yakunlanadi.
                               final err = await DriverTripService.instance.completeOrder(
                                 order.id,
                                 completedBy: TripCompletedBy.driver,
-                                driverStars: stars,
                               );
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text(err ?? '${tr('Safar yakunlandi')} · $stars★'),
+                                    content: Text(err ?? tr('Safar yakunlandi')),
                                     behavior: SnackBarBehavior.floating,
                                   ),
                                 );

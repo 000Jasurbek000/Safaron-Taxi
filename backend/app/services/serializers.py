@@ -76,6 +76,10 @@ def trip_out(
     vehicle: Vehicle | None = None,
     user: User | None = None,
     avg_response_sec: int | None = None,
+    *,
+    override_from: str | None = None,
+    override_to: str | None = None,
+    override_price: int | None = None,
 ) -> TripOut:
     d = driver
     v = vehicle
@@ -94,27 +98,42 @@ def trip_out(
         car_model=v.model_name if v else "",
         plate=v.plate if v else "",
         car_photo=v.photo_path if v else None,
-        from_text=trip.from_text,
-        to_text=trip.to_text,
+        from_text=override_from or trip.from_text,
+        to_text=override_to or trip.to_text,
         from_note=trip.from_note,
         scheduled_at=trip.scheduled_at,
         seats_total=trip.seats_total,
         seats_available=trip.seats_available,
-        price=trip.price,
+        price=override_price if override_price is not None else trip.price,
         note=trip.note,
         status=trip.status,
         created_at=trip.created_at,
     )
 
 
-def trip_out_for(db: Session, trip: Trip) -> TripOut:
+def trip_out_for(
+    db: Session,
+    trip: Trip,
+    *,
+    override_from: str | None = None,
+    override_to: str | None = None,
+    override_price: int | None = None,
+) -> TripOut:
     driver = (
         db.query(DriverProfile)
         .options(joinedload(DriverProfile.user), joinedload(DriverProfile.vehicle))
         .filter(DriverProfile.id == trip.driver_id)
         .first()
     )
-    return trip_out(trip, driver, driver.vehicle if driver else None, driver.user if driver else None)
+    return trip_out(
+        trip,
+        driver,
+        driver.vehicle if driver else None,
+        driver.user if driver else None,
+        override_from=override_from,
+        override_to=override_to,
+        override_price=override_price,
+    )
 
 
 def booking_out(db: Session, booking: TripBooking) -> TripBookingOut:
@@ -138,7 +157,13 @@ def booking_out(db: Session, booking: TripBooking) -> TripBookingOut:
         completed_at=booking.completed_at,
         created_at=booking.created_at,
         expires_at=booking.expires_at,
-        trip=trip_out_for(db, booking.trip),
+        trip=trip_out_for(
+            db,
+            booking.trip,
+            override_from=booking.open_from_text,
+            override_to=booking.open_to_text,
+            override_price=booking.open_offered_price,
+        ),
         passenger_name=passenger.full_name if passenger else "",
         passenger_phone=passenger_phone_for_driver(passenger),
         passenger_rating=passenger.rating_avg if passenger else 5.0,

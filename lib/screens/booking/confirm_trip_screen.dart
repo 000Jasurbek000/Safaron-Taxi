@@ -13,6 +13,7 @@ import '../../widgets/contact_actions.dart';
 import '../../widgets/nav_actions.dart';
 import '../../services/active_booking_service.dart';
 import '../../widgets/duplicate_route_dialog.dart';
+import '../../widgets/place_picker_field.dart';
 import '../../widgets/safaron_header.dart';
 import 'waiting_driver_screen.dart';
 
@@ -247,26 +248,22 @@ class _ConfirmTripScreenState extends State<ConfirmTripScreen> {
                             style: GoogleFonts.montserrat(fontSize: 11, color: AppColors.textMuted, height: 1.35),
                           ),
                           const SizedBox(height: 10),
-                          TextField(
+                          PlacePickerField(
+                            label: tr('Qayerdan *'),
+                            hint: tr('Manzilni tanlang'),
                             controller: _from,
-                            decoration: InputDecoration(
-                              labelText: tr('Qayerdan *'),
-                              labelStyle: GoogleFonts.montserrat(),
-                              prefixIcon: const Icon(Icons.radio_button_checked, color: AppColors.primary, size: 18),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
+                            accent: AppColors.primary,
+                            mapOpen: false,
+                            onMapTap: () {},
                           ),
                           const SizedBox(height: 10),
-                          TextField(
+                          PlacePickerField(
+                            label: tr('Qayerga *'),
+                            hint: tr('Manzilni tanlang'),
                             controller: _to,
-                            decoration: InputDecoration(
-                              labelText: tr('Qayerga *'),
-                              labelStyle: GoogleFonts.montserrat(),
-                              prefixIcon: const Icon(Icons.place_rounded, color: AppColors.destination, size: 18),
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            style: GoogleFonts.montserrat(fontWeight: FontWeight.w700),
+                            accent: AppColors.destination,
+                            mapOpen: false,
+                            onMapTap: () {},
                           ),
                           const SizedBox(height: 10),
                           InkWell(

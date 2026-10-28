@@ -194,6 +194,11 @@ class BookTripIn(UTCModel):
     seats: int = Field(default=1, ge=1, le=15)
     note: Optional[str] = None
     exact_pickup: Optional[str] = None
+    # Trip "ochiq" bo'lsa (haydovchi yo'nalish/narx belgilamagan e'lon
+    # qilgan) — yo'lovchi o'zi kiritgan haqiqiy yo'nalish/narx.
+    from_text: Optional[str] = None
+    to_text: Optional[str] = None
+    offered_price: Optional[int] = None
 
 
 class IncreaseSeatsIn(UTCModel):

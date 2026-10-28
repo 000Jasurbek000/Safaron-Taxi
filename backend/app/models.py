@@ -231,6 +231,13 @@ class TripBooking(Base):
     exact_pickup: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     pending_seats: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Trip "ochiq" (haydovchi yo'nalish/narx belgilamagan) bo'lsa, yo'lovchi
+    # o'zi kiritgan haqiqiy yo'nalish/narx shu yerda saqlanadi — aks holda
+    # haydovchiga doim trip'ning bo'sh standart qiymatlari ("Ochiq", 0 so'm)
+    # ko'rsatilardi, yo'lovchi nima kiritganidan qat'i nazar.
+    open_from_text: Mapped[Optional[str]] = mapped_column(String(160), nullable=True)
+    open_to_text: Mapped[Optional[str]] = mapped_column(String(160), nullable=True)
+    open_offered_price: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     trip: Mapped[Trip] = relationship(back_populates="bookings")
 

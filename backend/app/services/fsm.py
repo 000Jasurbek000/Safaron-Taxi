@@ -28,7 +28,7 @@ DRIVER_RESPONSE_TRANSITIONS: dict[str, set[str]] = {
 
 TRIP_TRANSITIONS: dict[str, set[str]] = {
     "OPEN": {"FULL", "IN_PROGRESS", "CANCELLED", "EXPIRED", "COMPLETED"},
-    "FULL": {"IN_PROGRESS", "CANCELLED", "OPEN"},
+    "FULL": {"IN_PROGRESS", "CANCELLED", "OPEN", "EXPIRED"},
     "IN_PROGRESS": {"COMPLETED", "CANCELLED"},
     "COMPLETED": set(),
     "CANCELLED": set(),

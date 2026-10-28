@@ -107,11 +107,23 @@ class TripApi {
     return data as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> book(int tripId, {int seats = 1, String? note, String? exactPickup}) async {
+  Future<Map<String, dynamic>> book(
+    int tripId, {
+    int seats = 1,
+    String? note,
+    String? exactPickup,
+    String? fromText,
+    String? toText,
+    int? offeredPrice,
+  }) async {
     final data = await ApiClient.instance.post('/api/trips/$tripId/book', body: {
       'seats': seats,
       if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
       if (exactPickup != null && exactPickup.trim().isNotEmpty) 'exact_pickup': exactPickup.trim(),
+      // "Ochiq" safar uchun — yo'lovchi o'zi kiritgan haqiqiy yo'nalish/narx.
+      if (fromText != null && fromText.trim().isNotEmpty) 'from_text': fromText.trim(),
+      if (toText != null && toText.trim().isNotEmpty) 'to_text': toText.trim(),
+      if (offeredPrice != null) 'offered_price': offeredPrice,
     });
     return data as Map<String, dynamic>;
   }

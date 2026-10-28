@@ -32,6 +32,20 @@ def _expire_booking_if_needed(db: Session, booking: TripBooking) -> None:
         booking.status = "EXPIRED"
 
 
+# Haydovchi e'lon qilgan safar (Trip, bookinglardan farqli) muddati —
+# jadvaldagi vaqtdan necha soat o'tgandan keyin yangi band qilishga yopiq
+# deb hisoblanadi. Avval bu yerda umuman tekshiruv yo'q edi — haydovchi
+# bir marta e'lon qilgan safar hech qachon o'z-o'zidan yopilmay, haftalab
+# "qidiruv" ro'yxatida eskirgan holda qolib ketardi.
+TRIP_EXPIRE_AFTER_SCHEDULED = timedelta(hours=2)
+
+
+def _expire_trip_if_needed(db: Session, trip: Trip) -> None:
+    if trip.status in ("OPEN", "FULL") and trip.scheduled_at < datetime.utcnow() - TRIP_EXPIRE_AFTER_SCHEDULED:
+        assert_transition(TRIP_TRANSITIONS, trip.status, "EXPIRED")
+        trip.status = "EXPIRED"
+
+
 def _load_trip_bundle(db: Session, trip: Trip, avg_response_sec: int | None = None):
     driver = db.query(DriverProfile).options(joinedload(DriverProfile.user), joinedload(DriverProfile.vehicle)).filter(DriverProfile.id == trip.driver_id).first()
     return trip_out(trip, driver, driver.vehicle if driver else None, driver.user if driver else None, avg_response_sec)
@@ -61,8 +75,14 @@ def list_ready_trips(
     if to_q:
         q = q.filter(Trip.to_text.ilike(f"%{to_q.strip()}%"))
     trips = q.order_by(Trip.scheduled_at.asc()).limit(100).all()
-    avg_map = compute_avg_response_secs(db, [t.driver_id for t in trips])
-    return [_load_trip_bundle(db, t, avg_map.get(t.driver_id)) for t in trips]
+    live_trips = []
+    for t in trips:
+        _expire_trip_if_needed(db, t)
+        if t.status in ("OPEN", "FULL"):
+            live_trips.append(t)
+    db.commit()
+    avg_map = compute_avg_response_secs(db, [t.driver_id for t in live_trips])
+    return [_load_trip_bundle(db, t, avg_map.get(t.driver_id)) for t in live_trips]
 
 
 @router.post("", response_model=TripOut)
@@ -105,6 +125,9 @@ def create_trip(body: TripCreateIn, driver: DriverProfile = Depends(get_driver_p
 @router.get("/mine", response_model=list[TripOut])
 def my_trips(driver: DriverProfile = Depends(get_approved_driver), db: Session = Depends(get_db)):
     trips = db.query(Trip).filter(Trip.driver_id == driver.id).order_by(Trip.scheduled_at.desc()).limit(100).all()
+    for t in trips:
+        _expire_trip_if_needed(db, t)
+    db.commit()
     return [_load_trip_bundle(db, t) for t in trips]
 
 
@@ -187,15 +210,20 @@ def book_trip(trip_id: int, body: BookTripIn, user: User = Depends(get_current_u
     trip = db.query(Trip).filter(Trip.id == trip_id).first()
     if not trip:
         raise HTTPException(404, "Safar topilmadi.")
+    _expire_trip_if_needed(db, trip)
     if trip.status != "OPEN":
+        if trip.status == "EXPIRED":
+            db.commit()
+            raise HTTPException(400, "Safar vaqti o‘tgan.")
         raise HTTPException(400, "Bu safarga joy band qilib bo‘lmaydi.")
     driver_check = db.get(DriverProfile, trip.driver_id)
     if not driver_check or not driver_check.is_online:
         raise HTTPException(400, "Haydovchi hozir oflayn — bu safarga joy band qilib bo‘lmaydi.")
-    if trip.scheduled_at < datetime.utcnow():
-        trip.status = "EXPIRED"
-        db.commit()
-        raise HTTPException(400, "Safar vaqti o‘tgan.")
+    # "Ochiq" safarning trip-darajadagi matni har doim bir xil ("Ochiq" /
+    # "Yo'nalish ochiq") — haqiqiy yo'nalish har bir band qilishda
+    # yo'lovchi tomonidan alohida kiritiladi (pastga qarang), shuning
+    # uchun pastdagi "bir xil yo'nalish" tekshiruvi bu yerda ishlatilmaydi.
+    is_open_trip = trip.from_text == "Ochiq" or trip.to_text == "Yo‘nalish ochiq"
     if body.seats > trip.seats_available:
         raise HTTPException(400, "Bo‘sh joy yetarli emas.")
     # Faqat FAOL (hali yakunlanmagan) band qilish bloklaydi — rad etilgan,
@@ -223,20 +251,35 @@ def book_trip(trip_id: int, body: BookTripIn, user: User = Depends(get_current_u
     # sifatida joylagan bo'lsa, passenger yana bir faol so'rov yuborib,
     # bitta haydovchiga bir vaqtning o'zida bir xil manzilga ikkita
     # parallel so'rov ochib qo'yishi mumkin edi. Shuni ham yopamiz.
-    same_route_active = (
-        db.query(TripBooking)
-        .join(Trip, Trip.id == TripBooking.trip_id)
-        .filter(
-            Trip.driver_id == trip.driver_id,
-            Trip.from_text == trip.from_text,
-            Trip.to_text == trip.to_text,
-            TripBooking.passenger_id == user.id,
-            TripBooking.status.in_(["PENDING", "COUNTERED", "CONFIRMED", "DRIVER_ON_WAY", "PASSENGER_PICKED"]),
+    if not is_open_trip:
+        same_route_active = (
+            db.query(TripBooking)
+            .join(Trip, Trip.id == TripBooking.trip_id)
+            .filter(
+                Trip.driver_id == trip.driver_id,
+                Trip.from_text == trip.from_text,
+                Trip.to_text == trip.to_text,
+                TripBooking.passenger_id == user.id,
+                TripBooking.status.in_(["PENDING", "COUNTERED", "CONFIRMED", "DRIVER_ON_WAY", "PASSENGER_PICKED"]),
+            )
+            .first()
         )
-        .first()
-    )
-    if same_route_active:
-        raise HTTPException(400, "Siz shu haydovchiga shu yo‘nalishga allaqachon faol so‘rov yuborgansiz.")
+        if same_route_active:
+            raise HTTPException(400, "Siz shu haydovchiga shu yo‘nalishga allaqachon faol so‘rov yuborgansiz.")
+
+    # Yo'lovchi o'zi kiritgan haqiqiy yo'nalish/narx shart — bular
+    # booking'ga saqlanadi (aks holda haydovchiga doim trip'ning bo'sh
+    # standart qiymatlari "Ochiq" / 0 so'm ko'rsatilib qolardi).
+    open_from_text = open_to_text = None
+    open_offered_price = None
+    if is_open_trip:
+        open_from_text = (body.from_text or "").strip()
+        open_to_text = (body.to_text or "").strip()
+        if not open_from_text or not open_to_text:
+            raise HTTPException(400, "Qayerdan va qayerga manzilni kiriting.")
+        open_offered_price = body.offered_price
+        if open_offered_price is None or open_offered_price < 1000:
+            raise HTTPException(400, "Taklif narxini kiriting (kamida 1000 so‘m).")
 
     settings = get_settings()
     booking = TripBooking(
@@ -247,13 +290,16 @@ def book_trip(trip_id: int, body: BookTripIn, user: User = Depends(get_current_u
         expires_at=datetime.utcnow() + timedelta(seconds=settings.instant_booking_timeout_sec),
         exact_pickup=(body.exact_pickup or "").strip() or None,
         note=(body.note or "").strip() or None,
+        open_from_text=open_from_text,
+        open_to_text=open_to_text,
+        open_offered_price=open_offered_price,
     )
     db.add(booking)
     db.flush()
     driver = db.get(DriverProfile, trip.driver_id)
     if driver:
         note = (body.note or "").strip()
-        booking_body = f"{user.full_name}: {trip.from_text} → {trip.to_text}"
+        booking_body = f"{user.full_name}: {open_from_text or trip.from_text} → {open_to_text or trip.to_text}"
         if note:
             booking_body += f" ({note})"
         notify(
@@ -378,8 +424,13 @@ def respond_booking(
     if action != "accept":
         raise HTTPException(400, "action: accept yoki reject.")
 
-    agreed = body.offered_price if body.offered_price is not None else trip.price
-    is_counter = agreed != trip.price
+    # "Ochiq" safarda yo'lovchining o'z taklif narxi (trip.price = 0, u
+    # yerda hech qanday narx yo'q) — mos kelish/qarshi-taklif shu asl
+    # narxga nisbatan hisoblanishi kerak, aks holda haydovchi "qabul
+    # qilish" bossa ham narx har doim 0 so'm bo'lib qolardi.
+    passenger_price = booking.open_offered_price if booking.open_offered_price is not None else trip.price
+    agreed = body.offered_price if body.offered_price is not None else passenger_price
+    is_counter = agreed != passenger_price
 
     if is_counter:
         assert_transition(TRIP_BOOKING_TRANSITIONS, booking.status, "COUNTERED")
@@ -419,7 +470,7 @@ def respond_booking(
         db,
         user_id=booking.passenger_id,
         title="Haydovchi qabul qildi!",
-        body=f"{trip.from_text} → {trip.to_text}",
+        body=f"{booking.open_from_text or trip.from_text} → {booking.open_to_text or trip.to_text}",
         type="booking_accepted",
         related_type="trip_booking",
         related_id=booking.id,
@@ -458,7 +509,7 @@ def confirm_counter(booking_id: int, user: User = Depends(get_current_user), db:
             db,
             user_id=driver.user_id,
             title="Yo‘lovchi narxni tasdiqladi",
-            body=f"{trip.from_text} → {trip.to_text}",
+            body=f"{booking.open_from_text or trip.from_text} → {booking.open_to_text or trip.to_text}",
             type="booking_confirmed",
             related_type="trip_booking",
             related_id=booking.id,
@@ -589,6 +640,16 @@ def advance_booking_status(
     elif not is_owner_driver:
         raise HTTPException(403, "Faqat haydovchi holatni o‘zgartira oladi.")
 
+    if booking.status == new:
+        # Allaqachon shu holatda — masalan ikki tomon (yo'lovchi va
+        # haydovchi) deyarli bir vaqtda "Safarni yakunlash"ni bossa,
+        # ikkinchi chaqiruv quyidagi daromad/joy-qaytarish effektlarini
+        # QAYTA bajarmasligi kerak (`assert_transition` current==new'da
+        # jim o'tib ketadi, lekin shundan keyingi kod baribir ishlaydi —
+        # shuning uchun bu tekshiruv ayni shu yerda, avtorizatsiyadan
+        # KEYIN, lekin effektlardan OLDIN turadi).
+        return booking_out(db, booking)
+
     assert_transition(TRIP_BOOKING_TRANSITIONS, booking.status, new)
     booking.status = new
     if new == "PASSENGER_PICKED":
@@ -634,6 +695,17 @@ def advance_booking_status(
         price = unit_price * booking.seats
         trip_driver.trips_count += 1
         trip_driver.total_earnings += price
+        if trip:
+            # Yakunlangan band qilishning o'rindig'i endi jamiyda bo'sh —
+            # yo'lovchi tushirib qo'yilgan, haydovchi shu safarga yana yangi
+            # yo'lovchi ola oladi. Avval bu yerda qaytarilmasdi, shuning
+            # uchun bir nechta band qilish yakunlangandan keyin ham
+            # seats_available past qolib ketardi (masalan 4 o'rindiqdan
+            # 3 tasi yakunlangandan keyin ham 1 bo'lib qolardi, 4 ga
+            # qaytmasdi).
+            trip.seats_available = min(trip.seats_total, trip.seats_available + booking.seats)
+            if trip.status == "FULL":
+                trip.status = "OPEN"
     db.commit()
     return booking_out(db, booking)
 

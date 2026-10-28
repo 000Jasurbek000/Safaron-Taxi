@@ -329,6 +329,11 @@ def advance_status(request_id: int, body: StatusUpdateIn, user: User = Depends(g
     if not driver or req.selected_driver_id != driver.id:
         raise HTTPException(403, "Faqat tanlangan haydovchi statusni o‘zgartira oladi.")
     new = body.status.upper()
+    if req.status == new:
+        # Allaqachon shu holatda — ikkinchi marta (masalan tarmoq
+        # kechikishi tufayli ikki marta bosilsa) daromadni qayta
+        # qo'shib yubormasligi uchun.
+        return _build_request_out(db, req, viewer_driver_id=driver.id)
     assert_transition(REQUEST_TRANSITIONS, req.status, new)
     req.status = new
     titles = {

@@ -13,6 +13,10 @@ class LocationPlaceService extends ChangeNotifier {
   String districtLabel = '';
   bool loading = false;
   bool denied = false;
+  // Foydalanuvchi bir marta rad etgandan keyin, keyingi har bir
+  // pastga-tortib-yangilash yoki ilova fonga/oldinga qaytishida OS
+  // ruxsat oynasi qayta-qayta ochilmasligi uchun.
+  bool _permissionDeniedOnce = false;
 
   Future<void> ensure({bool force = false}) async {
     if (loading && !force) return;
@@ -20,8 +24,11 @@ class LocationPlaceService extends ChangeNotifier {
     notifyListeners();
     try {
       var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
+      if (permission == LocationPermission.denied && !_permissionDeniedOnce) {
         permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          _permissionDeniedOnce = true;
+        }
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
@@ -31,6 +38,7 @@ class LocationPlaceService extends ChangeNotifier {
         return;
       }
       denied = false;
+      _permissionDeniedOnce = false;
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
       );

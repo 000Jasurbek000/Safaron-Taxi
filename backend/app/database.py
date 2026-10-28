@@ -50,6 +50,9 @@ def ensure_columns() -> None:
             ("exact_pickup", "VARCHAR(255)"),
             ("note", "TEXT"),
             ("pending_seats", "INTEGER"),
+            ("open_from_text", "VARCHAR(160)"),
+            ("open_to_text", "VARCHAR(160)"),
+            ("open_offered_price", "INTEGER"),
         ],
         "messages": [
             ("request_id", "INTEGER"),

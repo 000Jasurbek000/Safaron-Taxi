@@ -623,7 +623,24 @@ class ActiveBookingService extends ChangeNotifier {
     // ko'radi va keyinroq holatini pollab turamiz — boshqa qurilmada ham).
     if (taxi.remoteTripId != null) {
       try {
-        final created = await TripApi.instance.book(taxi.remoteTripId!, seats: seats, note: note, exactPickup: exactPickup);
+        final created = await TripApi.instance.book(
+          taxi.remoteTripId!,
+          seats: seats,
+          note: note,
+          exactPickup: exactPickup,
+          // "Ochiq" safar — haydovchi yo'nalish/narx belgilamagan, shuning
+          // uchun yo'lovchi `confirm_trip_screen.dart`da o'zi kiritgan
+          // haqiqiy yo'nalish/narxni serverga yuboramiz (aks holda
+          // haydovchiga doim "Ochiq" / 0 so'm ko'rsatilib qolardi).
+          // `taxi.price` shu bosqichda JAMI narx (1 kishi narxi × seats,
+          // confirm_trip_screen.dart'da ko'paytirilgan) — backend esa
+          // agreed_price/offered_price'ni har doim 1 KISHI narxi sifatida
+          // kutadi (keyin o'zi `* booking.seats` qilib ko'paytiradi), shu
+          // sababli bu yerda qaytadan seats'ga bo'linadi.
+          fromText: taxi.isOpenTrip ? taxi.from : null,
+          toText: taxi.isOpenTrip ? taxi.to : null,
+          offeredPrice: taxi.isOpenTrip && seats > 0 ? taxi.price ~/ seats : null,
+        );
         id = 'inst_${created['id']}';
       } on ApiException catch (e) {
         return e.message;

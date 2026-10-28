@@ -20,6 +20,12 @@ enum PassengerOrderKind { instant, prebook }
 enum PassengerOrderStatus {
   open,
   counterOffered,
+  // Oldindan bron oqimida: men (haydovchi) so'rovga javob berdim, ammo
+  // yo'lovchi hali meni TANLAMAGAN (boshqa haydovchilar ham javob
+  // bergan/berishi mumkin). Avval bu `accepted` bilan bir xil hisoblanardi
+  // — shuning uchun yo'lovchi hali tasdiqlamagan bo'lsa ham "Yo'lovchini
+  // oldim" tugmasi chiqib qolardi.
+  awaitingSelection,
   accepted,
   onWay,
   pickedUp,
@@ -425,6 +431,7 @@ class DriverTripService extends ChangeNotifier {
       .where((o) =>
           _isForMe(o) &&
           (o.status == PassengerOrderStatus.accepted ||
+              o.status == PassengerOrderStatus.awaitingSelection ||
               o.status == PassengerOrderStatus.counterOffered ||
               o.status == PassengerOrderStatus.onWay ||
               o.status == PassengerOrderStatus.pickedUp))
@@ -438,6 +445,7 @@ class DriverTripService extends ChangeNotifier {
       .where((o) =>
           _isForMe(o) &&
           (o.status == PassengerOrderStatus.accepted ||
+              o.status == PassengerOrderStatus.awaitingSelection ||
               o.status == PassengerOrderStatus.onWay ||
               o.status == PassengerOrderStatus.pickedUp))
       .toList();
@@ -832,7 +840,7 @@ class DriverTripService extends ChangeNotifier {
       case 'PENDING':
         return PassengerOrderStatus.open;
       case 'ACCEPTED':
-        return PassengerOrderStatus.accepted;
+        return PassengerOrderStatus.awaitingSelection;
       case 'SELECTED':
       case 'CONFIRMED':
         return switch (requestStatus) {
